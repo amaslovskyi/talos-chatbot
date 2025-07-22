@@ -1,6 +1,8 @@
 """
 Auto-indexing module for detecting and indexing new documents.
 Provides functionality to automatically index new documents when detected.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import os

@@ -1,6 +1,8 @@
 """
 Custom embedding implementation for Ollama models.
 Supports nomic-embed-text and other Ollama embedding models.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import logging

@@ -1,6 +1,8 @@
 """
 Vector store module for document embeddings and similarity search.
 Uses ChromaDB for vector storage and SentenceTransformers for embeddings.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import logging

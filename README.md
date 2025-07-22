@@ -1,5 +1,7 @@
 # RAG Chatbot
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A sophisticated **Retrieval-Augmented Generation (RAG)** chatbot that combines local document search with corporate portal fallback. The system intelligently retrieves relevant information from your documents and falls back to a corporate portal when local knowledge is insufficient.
 
 ## 🌟 Features

@@ -1,6 +1,8 @@
 """
 Configuration module for the RAG chatbot.
 Manages all environment variables and application settings.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import os

@@ -1,6 +1,8 @@
 """
 Hybrid chatbot that combines local models with external API fallback.
 Provides resilience and flexibility for different use cases.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import logging

@@ -1,6 +1,8 @@
 """
 Main chatbot orchestrator module.
 Combines document retrieval with language model generation for RAG responses.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import logging

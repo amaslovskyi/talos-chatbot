@@ -1,6 +1,8 @@
 """
 Flask web interface for the RAG chatbot.
 Provides a simple web UI for interacting with the chatbot.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import os

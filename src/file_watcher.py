@@ -1,6 +1,8 @@
 """
 File system watcher for automatic document indexing.
 Monitors the documents directory for file changes and triggers re-indexing.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import logging

@@ -2,6 +2,8 @@
 """
 Main entry point for the RAG Chatbot application.
 Provides command-line interface and web server startup.
+
+MIT License - Copyright (c) 2025 talos-chatbot
 """
 
 import os
