@@ -213,3 +213,41 @@ def load_and_chunk_documents(
     loader = DocumentLoader()
     documents = loader.load_documents(directory)
     return loader.chunk_documents(documents)
+
+
+def load_and_chunk_specific_files(
+    file_paths: List[str],
+) -> List[LangChainDocument]:
+    """
+    Load and chunk specific files by their paths.
+
+    Args:
+        file_paths: List of file paths to process.
+
+    Returns:
+        List of chunked LangChain documents.
+    """
+    loader = DocumentLoader()
+    documents = []
+
+    for file_path in file_paths:
+        try:
+            path = Path(file_path)
+            if path.exists() and path.is_file():
+                doc_content = loader._load_single_document(path)
+                if doc_content:
+                    doc = LangChainDocument(
+                        page_content=doc_content,
+                        metadata={
+                            "source": str(path),
+                            "filename": path.name,
+                            "file_type": path.suffix.lower(),
+                            "file_size": path.stat().st_size,
+                        },
+                    )
+                    documents.append(doc)
+        except Exception as e:
+            logger.error(f"Error processing file {file_path}: {str(e)}")
+            continue
+
+    return loader.chunk_documents(documents)

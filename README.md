@@ -105,7 +105,7 @@ CHUNK_OVERLAP=100
 
 # Web Interface
 FLASK_HOST=127.0.0.1
-FLASK_PORT=5000
+FLASK_PORT=5001
 FLASK_DEBUG=true
 ```
 
@@ -131,7 +131,7 @@ cp /path/to/your/documents/* documents/
 ```bash
 python main.py web
 ```
-Then open http://localhost:5000 in your browser.
+Then open http://localhost:5001 in your browser.
 
 #### Command Line Chat
 ```bash
@@ -192,12 +192,12 @@ According to the HR handbook, employees are entitled to 20 days of vacation per 
 ### REST API
 ```bash
 # Send a chat request
-curl -X POST http://localhost:5000/api/chat \
+curl -X POST http://localhost:5001/api/chat \
   -H "Content-Type: application/json" \
   -d '{"question": "What are the security guidelines?"}'
 
 # Get system statistics
-curl http://localhost:5000/api/stats
+curl http://localhost:5001/api/stats
 ```
 
 ## 🔄 Automatic Document Management
@@ -294,7 +294,7 @@ Once running, the system:
 | Variable      | Default     | Description             |
 | ------------- | ----------- | ----------------------- |
 | `FLASK_HOST`  | `127.0.0.1` | Web server host         |
-| `FLASK_PORT`  | `5000`      | Web server port         |
+| `FLASK_PORT`  | `5001`      | Web server port         |
 | `FLASK_DEBUG` | `true`      | Enable Flask debug mode |
 
 ### Retrieval Logic

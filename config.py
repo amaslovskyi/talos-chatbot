@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # Flask Web Interface
     flask_host: str = "127.0.0.1"
-    flask_port: int = 5000
+    flask_port: int = 5001
     flask_debug: bool = True
 
     class Config:

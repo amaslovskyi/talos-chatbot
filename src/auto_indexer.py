@@ -9,7 +9,7 @@ import hashlib
 from typing import List, Dict, Set
 from pathlib import Path
 
-from src.document_loader import load_and_chunk_documents
+from src.document_loader import load_and_chunk_documents, load_and_chunk_specific_files
 from src.vector_store import create_vector_store
 from config import get_settings
 
@@ -169,7 +169,7 @@ class AutoIndexer:
                 logger.info(f"📚 Found {len(new_documents)} new documents to index")
 
                 # Load and chunk documents
-                documents = load_and_chunk_documents(
+                documents = load_and_chunk_specific_files(
                     [str(doc) for doc in new_documents]
                 )
 

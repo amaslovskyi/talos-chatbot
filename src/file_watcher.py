@@ -22,6 +22,21 @@ try:
 except ImportError:
     WATCHDOG_AVAILABLE = False
 
+    # Create dummy classes for when watchdog is not available
+    class FileSystemEventHandler:
+        def __init__(self):
+            pass
+
+    class FileModifiedEvent:
+        pass
+
+    class FileCreatedEvent:
+        pass
+
+    class FileDeletedEvent:
+        pass
+
+
 from config import get_settings
 
 logging.basicConfig(level=logging.INFO)
