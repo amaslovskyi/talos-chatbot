@@ -118,6 +118,10 @@ class DocumentWatcher:
         Args:
             on_change_callback: Function to call when documents change
         """
+        self.settings = get_settings()
+        self.on_change_callback = on_change_callback
+        self._is_watching = False
+
         if not WATCHDOG_AVAILABLE:
             logger.warning(
                 "⚠️ Watchdog not available. Install with: pip install watchdog"
@@ -125,11 +129,8 @@ class DocumentWatcher:
             self.observer = None
             return
 
-        self.settings = get_settings()
-        self.on_change_callback = on_change_callback
         self.observer = Observer()
         self.handler = DocumentChangeHandler(on_change_callback)
-        self._is_watching = False
 
     def start_watching(self) -> bool:
         """
