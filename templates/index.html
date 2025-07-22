@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chatbot - AI Document Assistant</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            background: white;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Main Chat Area */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: #fafafa;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .chat-header-icon {
+            font-size: 24px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            border-radius: 12px;
+        }
+
+        .chat-header-text h1 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .chat-header-text p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .chat-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* Messages Area */
+        .messages-container {
+            flex: 1;
+            padding: 20px 30px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+
+        .message {
+            margin-bottom: 24px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .message.bot {
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 16px 20px;
+            border-radius: 18px;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 6px;
+        }
+
+        .message.bot .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e5e7eb;
+            border-bottom-left-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .message.bot .message-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -8px;
+            width: 0;
+            height: 0;
+            border: 8px solid transparent;
+            border-right-color: white;
+            border-top: none;
+            border-left: none;
+        }
+
+        .message.user .message-content::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -8px;
+            width: 0;
+            height: 0;
+            border: 8px solid transparent;
+            border-left-color: #667eea;
+            border-top: none;
+            border-right: none;
+        }
+
+        /* Message Metadata */
+        .message-meta {
+            margin-top: 8px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .confidence-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .confidence-high {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .confidence-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .confidence-low {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Sources Section */
+        .sources-section {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .sources-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .source-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .source-item:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+
+        .source-title {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+
+        .source-meta {
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        /* Input Area */
+        .input-container {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 24px;
+            padding: 8px;
+            transition: all 0.2s;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .chat-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 12px 16px;
+            font-size: 15px;
+            outline: none;
+            resize: none;
+            max-height: 120px;
+            min-height: 24px;
+            line-height: 1.4;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            color: white;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .sidebar-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .sidebar-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stats-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #fbbf24;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .action-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-button:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .loading-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .loading-dots span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #667eea;
+            animation: loading 1.4s infinite ease-in-out;
+        }
+
+        .loading-dots span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .loading-dots span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes loading {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .app-container {
+                grid-template-columns: 1fr;
+                height: 100vh;
+            }
+
+            .sidebar {
+                display: none;
+            }
+
+            .message-content {
+                max-width: 85%;
+            }
+
+            .chat-header {
+                padding: 15px 20px;
+            }
+
+            .messages-container {
+                padding: 15px 20px;
+            }
+
+            .input-container {
+                padding: 15px 20px;
+            }
+        }
+
+        /* Scrollbar Styling */
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* Floating corner image */
+        .corner-image {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: 3px solid white;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .corner-image:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Alternative: Image in chat header */
+        .header-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Floating corner avatar -->
+    <div class="corner-image" title="Your AI Assistant 🤖">
+        <img src="/static/avatar.svg" alt="AI Assistant" style="width: 100%; height: 100%; border-radius: 50%;"
+            onerror="this.innerHTML='🤖'; this.style.fontSize='40px'; this.style.display='flex'; this.style.alignItems='center'; this.style.justifyContent='center';">
+    </div>
+
+    <div class="app-container">
+        <!-- Main Chat Area -->
+        <div class="chat-container">
+            <!-- Chat Header -->
+            <div class="chat-header">
+                <div class="chat-header-left">
+                    <div class="chat-header-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="chat-header-text">
+                        <h1>RAG Chatbot</h1>
+                        <p>AI Document Assistant</p>
+                    </div>
+                </div>
+                <div class="chat-status">
+                    <div class="status-indicator"></div>
+                    <span>Online</span>
+                </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="messages-container" id="messagesContainer">
+                <!-- Welcome Message -->
+                <div class="message bot">
+                    <div class="message-content">
+                        <div>👋 <strong>Hey there!</strong> I'm your AI document assistant! 🤖<br><br>
+                            💡 I can help you find information from your documents and answer questions about
+                            them.<br><br>
+                            🔍 <strong>Try asking me:</strong><br>
+                            &bull; "What is [topic] mentioned in my documents?"<br>
+                            &bull; "Summarize the key points about [subject]"<br>
+                            &bull; "How does [concept] work according to my files?"<br><br>
+                            ✨ <strong>What makes me special:</strong> I'll cite my sources and show you exactly where I
+                            found the information!<br><br>
+                            🚀 Ready when you are! What would you like to explore?</div>
+                        <div class="message-meta">
+                            <span class="confidence-badge confidence-high">
+                                <i class="fas fa-check-circle"></i>
+                                Ready to help!
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea id="chatInput" class="chat-input" placeholder="Ask me anything about your documents..."
+                        rows="1"></textarea>
+                    <button id="sendButton" class="send-button">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Send</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- System Status -->
+            <div class="sidebar-section">
+                <h3>
+                    <i class="fas fa-chart-line"></i>
+                    System Status
+                </h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Documents</span>
+                        <span class="stat-value" id="docCount">384</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Model</span>
+                        <span class="stat-value">gemma3n:latest</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Embeddings</span>
+                        <span class="stat-value">nomic-embed-text</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Similarity</span>
+                        <span class="stat-value">0.7</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Max Results</span>
+                        <span class="stat-value">5</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="sidebar-section">
+                <h3>
+                    <i class="fas fa-bolt"></i>
+                    Quick Actions
+                </h3>
+                <div class="quick-actions">
+                    <button class="action-button" onclick="checkIndexStatus()">
+                        <i class="fas fa-search"></i>
+                        Check Index Status
+                    </button>
+                    <button class="action-button" onclick="reindexDocuments()">
+                        <i class="fas fa-sync"></i>
+                        Re-index Documents
+                    </button>
+                    <button class="action-button" onclick="clearChat()">
+                        <i class="fas fa-trash"></i>
+                        Clear Chat
+                    </button>
+                    <button class="action-button" onclick="exportChat()">
+                        <i class="fas fa-download"></i>
+                        Export Chat
+                    </button>
+                    <button class="action-button" onclick="showHelp()">
+                        <i class="fas fa-question-circle"></i>
+                        Help
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="sidebar-section">
+                <h3>
+                    <i class="fas fa-lightbulb"></i>
+                    Tips
+                </h3>
+                <div style="font-size: 13px; line-height: 1.5; opacity: 0.9;">
+                    <p>💡 Ask specific questions for better results</p>
+                    <p>📄 I can search through your PDFs, docs, and more</p>
+                    <p>🔍 Try different phrasings if results aren't helpful</p>
+                    <p>📊 Check confidence scores for reliability</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const messagesContainer = document.getElementById('messagesContainer');
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+
+        // Auto-resize textarea
+        chatInput.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Send message on Enter (but allow Shift+Enter for new line)
+        chatInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Send button click
+        sendButton.addEventListener('click', sendMessage);
+
+        function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, 'user');
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+
+            // Show loading
+            const loadingId = addLoadingMessage();
+
+            // Send to backend
+            fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: message })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    removeLoadingMessage(loadingId);
+                    addBotMessage(data.response, data.confidence, data.sources);
+                })
+                .catch(error => {
+                    removeLoadingMessage(loadingId);
+                    addErrorMessage('Sorry, I encountered an error. Please try again.');
+                    console.error('Error:', error);
+                });
+        }
+
+        function addMessage(content, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function addBotMessage(content, confidence, sources) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            // Format content to make it more readable
+            const formattedContent = formatBotResponse(content);
+            contentDiv.innerHTML = `<div>${formattedContent}</div>`;
+
+            // Add confidence badge
+            const confidenceClass = confidence >= 0.7 ? 'confidence-high' :
+                confidence >= 0.4 ? 'confidence-medium' : 'confidence-low';
+            const confidenceText = confidence >= 0.7 ? 'High' :
+                confidence >= 0.4 ? 'Medium' : 'Low';
+
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'message-meta';
+            metaDiv.innerHTML = `
+                <span class="confidence-badge ${confidenceClass}">
+                    <i class="fas fa-chart-line"></i>
+                    Confidence: ${Math.round(confidence * 100)}%
+                </span>
+            `;
+            contentDiv.appendChild(metaDiv);
+
+            // Add sources if available
+            if (sources && sources.length > 0) {
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.className = 'sources-section';
+                sourcesDiv.innerHTML = `
+                    <div class="sources-title">
+                        <i class="fas fa-file-alt"></i>
+                        Sources (${sources.length})
+                    </div>
+                    ${sources.map(source => `
+                        <div class="source-item">
+                            <div class="source-title">${source.title}</div>
+                            <div class="source-meta">${source.source} • Score: ${Math.round(source.relevance_score * 100)}%</div>
+                        </div>
+                    `).join('')}
+                `;
+                contentDiv.appendChild(sourcesDiv);
+            }
+
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function addLoadingMessage() {
+            const loadingId = 'loading-' + Date.now();
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+            messageDiv.id = loadingId;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = `
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Thinking...
+                    <div class="loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            `;
+
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+            return loadingId;
+        }
+
+        function removeLoadingMessage(loadingId) {
+            const loadingElement = document.getElementById(loadingId);
+            if (loadingElement) {
+                loadingElement.remove();
+            }
+        }
+
+        function addErrorMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.style.borderColor = '#ef4444';
+            contentDiv.style.backgroundColor = '#fef2f2';
+            contentDiv.style.color = '#991b1b';
+            contentDiv.innerHTML = `
+                <div><i class="fas fa-exclamation-triangle"></i> ${message}</div>
+            `;
+
+            messageDiv.appendChild(contentDiv);
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function formatBotResponse(content) {
+            // Make the bot responses more readable
+            return content
+                // Convert **text** to bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Convert bullet points to proper HTML
+                .replace(/^• /gm, '&bull; ')
+                // Convert line breaks to HTML
+                .replace(/\n/g, '<br>')
+                // Make emojis slightly larger
+                .replace(/([\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}])/gu,
+                    '<span style="font-size: 1.1em;">$1</span>');
+        }
+
+        function clearChat() {
+            if (confirm('Are you sure you want to clear the chat history?')) {
+                messagesContainer.innerHTML = `
+                    <div class="message bot">
+                        <div class="message-content">
+                            <div>👋 Welcome! I'm your AI document assistant. I can help you find information from your local documents and corporate portal. What would you like to know?</div>
+                            <div class="message-meta">
+                                <span class="confidence-badge confidence-high">
+                                    <i class="fas fa-check-circle"></i>
+                                    Ready
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function exportChat() {
+            const messages = Array.from(messagesContainer.children).map(msg => {
+                const isUser = msg.classList.contains('user');
+                const content = msg.querySelector('.message-content').textContent;
+                return `${isUser ? 'You' : 'Assistant'}: ${content}`;
+            }).join('\n\n');
+
+            const blob = new Blob([messages], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'chat-export.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function checkIndexStatus() {
+            fetch('/index-status')
+                .then(response => response.json())
+                .then(data => {
+                    const indexing = data.indexing;
+                    const watcher = data.file_watcher;
+
+                    let message = `📊 Document Index Status\n\n`;
+                    message += `📁 Files in directory: ${indexing.total_files_in_directory}\n`;
+                    message += `💾 Documents in database: ${indexing.documents_in_database}\n`;
+                    message += `🆕 New files detected: ${indexing.new_files_detected}\n`;
+                    message += `🗑️ Deleted files detected: ${indexing.deleted_files_detected}\n`;
+                    message += `👀 File watcher: ${watcher.watching ? '✅ Active' : '❌ Inactive'}\n\n`;
+
+                    if (indexing.needs_indexing) {
+                        message += `⚠️ Index needs updating!\n`;
+                        if (indexing.new_files.length > 0) {
+                            message += `New files: ${indexing.new_files.join(', ')}\n`;
+                        }
+                        if (indexing.deleted_files.length > 0) {
+                            message += `Deleted files: ${indexing.deleted_files.join(', ')}\n`;
+                        }
+                        message += `\nClick "Re-index Documents" to update.`;
+                    } else {
+                        message += `✅ Everything is up to date!`;
+                    }
+
+                    alert(message);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error checking index status. Please try again.');
+                });
+        }
+
+        function reindexDocuments() {
+            const force = confirm('Do you want to force a complete re-index?\n\nClick OK for complete re-index, Cancel for smart sync.');
+
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Indexing...';
+            button.disabled = true;
+
+            fetch('/reindex', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ force: force })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+
+                    if (data.success) {
+                        const results = data.results;
+                        let message = `✅ Indexing completed!\n\n`;
+                        message += `📄 New documents: ${results.new_documents}\n`;
+                        message += `🗑️ Deleted documents: ${results.deleted_documents}\n`;
+                        message += `📊 Total chunks: ${results.total_chunks}\n`;
+
+                        if (results.indexed_files.length > 0) {
+                            message += `\nNew files:\n${results.indexed_files.join('\n')}`;
+                        }
+                        if (results.deleted_files.length > 0) {
+                            message += `\nDeleted files:\n${results.deleted_files.join('\n')}`;
+                        }
+
+                        alert(message);
+
+                        // Update document count in sidebar
+                        const docCount = document.getElementById('docCount');
+                        if (docCount) {
+                            // Refresh page to update stats
+                            location.reload();
+                        }
+                    } else {
+                        alert(`❌ Indexing failed: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    console.error('Error:', error);
+                    alert('Error during indexing. Please try again.');
+                });
+        }
+
+        function showHelp() {
+            alert(`RAG Chatbot Help
+
+🤖 How to use:
+• Ask questions about your documents
+• Be specific for better results
+• Check confidence scores
+
+📄 Supported files:
+• PDF, DOCX, TXT, MD, HTML
+
+🔍 Tips:
+• Try different phrasings
+• Ask follow-up questions
+• Use specific keywords
+
+📁 Document Management:
+• Add files to ./documents/ folder
+• Auto-indexing detects new files
+• Use "Re-index Documents" button if needed
+
+Need more help? Check the documentation.`);
+        }
+
+        // Focus input on load
+        chatInput.focus();
+    </script>
+</body>
+
+</html>
