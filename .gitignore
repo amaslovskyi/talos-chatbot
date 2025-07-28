@@ -145,6 +145,13 @@ vector_db/
 *.chroma
 chroma.sqlite3
 
+# Conversation memory and chat history (contains personal data)
+conversations/
+vector_db/conversations/
+**/conversations/
+*.conversation
+*.chat
+
 # Document storage (but allow documents/ for user files)
 # documents/  # Commented out - users need their documents!
 docs/
@@ -200,6 +207,23 @@ models/
 secrets.json
 api_keys.txt
 credentials.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.csr
+*.ca-bundle
+
+# Environment configuration files
+.env*
+!.env.example
+!.env.template
+
+# Database connection strings and configs
+database.conf
+db.conf
+*.db.conf
 
 # Index tracking files
 indexed_files.txt
@@ -227,3 +251,26 @@ backup/
 # Local testing files
 test_documents/
 test_output/
+
+# Security and sensitive configuration
+*.orig
+*.backup
+*.old
+*~
+.ssh/
+id_rsa*
+id_ed25519*
+auth_tokens/
+private_keys/
+
+# System and IDE files that might contain sensitive data
+.vscode/settings.json
+.idea/workspace.xml
+*.swp
+*.swo
+*~
+
+# GitHub Actions (keep workflows but ignore cache/logs)
+.github/cache/
+.github/logs/
+# Note: .github/workflows/ is tracked for security scanning
