@@ -7,8 +7,17 @@ MIT License - Copyright (c) 2025 talos-chatbot
 
 import os
 import logging
+import threading
+import time
 from typing import Dict, Any
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import (
+    Flask,
+    render_template,
+    request,
+    jsonify,
+    send_from_directory,
+    Response,
+)
 from flask_cors import CORS
 
 from src.chatbot import create_chatbot, RAGChatbot
@@ -28,6 +37,10 @@ CORS(app)  # Enable CORS for API endpoints
 # Global instances
 chatbot: HybridRAGChatbot = None
 document_watcher = None
+
+# Global dictionary to track active chat requests for stop functionality
+active_requests = {}
+request_lock = threading.Lock()
 
 
 def reindex_documents():
@@ -108,7 +121,8 @@ def chat_api():
     Expected JSON payload:
     {
         "message": "User's message",  # or "question" for compatibility
-        "max_sources": 5  # Optional
+        "max_sources": 5,  # Optional
+        "session_id": "session-uuid"  # Optional - creates new session if not provided
     }
     """
     try:
@@ -125,11 +139,21 @@ def chat_api():
         question = question.strip()
         max_sources = data.get("max_sources", 5)
 
+        # Generate unique request ID for stop functionality
+        import uuid
+
+        request_id = str(uuid.uuid4())
+
+        # Track this request
+        with request_lock:
+            active_requests[request_id] = {"stopped": False, "timestamp": time.time()}
+        session_id = data.get("session_id")  # Optional session ID
+
         if not question:
             return jsonify({"error": "Empty message"}), 400
 
-        # Get chatbot response
-        response = chatbot.chat(question, max_sources)
+        # Get chatbot response with session support
+        response = chatbot.chat(question, max_sources, session_id)
 
         # Format sources for JSON response
         sources_data = []
@@ -146,6 +170,10 @@ def chat_api():
             }
             sources_data.append(source_data)
 
+        # Clean up request tracking
+        with request_lock:
+            active_requests.pop(request_id, None)
+
         # Return response in the format expected by frontend
         return jsonify(
             {
@@ -154,11 +182,142 @@ def chat_api():
                 "confidence": response.confidence,
                 "retrieval_metadata": response.retrieval_metadata,
                 "model_used": response.model_used,
+                "session_id": response.session_id,  # Include session ID for frontend tracking
+                "request_id": request_id,  # Include request ID for stop functionality
             }
         )
 
     except Exception as e:
+        # Clean up request tracking on error
+        with request_lock:
+            active_requests.pop(request_id, None)
         logger.error(f"Error in chat API: {str(e)}")
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+
+@app.route("/stop-chat", methods=["POST"])
+def stop_chat():
+    """Stop an active chat request."""
+    try:
+        data = request.get_json()
+        request_id = data.get("request_id")
+
+        if not request_id:
+            return jsonify({"error": "No request_id provided"}), 400
+
+        with request_lock:
+            if request_id in active_requests:
+                active_requests[request_id]["stopped"] = True
+                logger.info(f"🛑 Chat request {request_id} marked for stopping")
+                return jsonify({"status": "stopped", "request_id": request_id})
+            else:
+                return jsonify({"error": "Request not found or already completed"}), 404
+
+    except Exception as e:
+        logger.error(f"Error stopping chat: {str(e)}")
+        return jsonify({"error": f"Error: {str(e)}"}), 500
+
+
+@app.route("/chat-stream", methods=["POST"])
+def chat_stream():
+    """Handle streaming chat requests with real-time progress updates."""
+    import json
+    import time
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        question = data.get("message") or data.get("question")
+        if not question:
+            return jsonify({"error": "No message provided"}), 400
+
+        question = question.strip()
+        max_sources = data.get("max_sources", 5)
+        session_id = data.get("session_id")
+
+        def generate_progress():
+            try:
+                # Step 1: Starting
+                yield f"data: {json.dumps({'type': 'progress', 'message': '🔍 Starting search...', 'step': 1, 'total': 5})}\n\n"
+                time.sleep(0.1)
+
+                # Step 2: Local search
+                yield f"data: {json.dumps({'type': 'progress', 'message': '📄 Searching local documents...', 'step': 2, 'total': 5})}\n\n"
+                time.sleep(0.1)
+
+                # Step 3: Check if external search needed
+                yield f"data: {json.dumps({'type': 'progress', 'message': '🌐 Checking for additional sources...', 'step': 3, 'total': 5})}\n\n"
+                time.sleep(0.1)
+
+                # Step 4: External search (if needed)
+                query_lower = question.lower()
+                needs_external = any(
+                    term in query_lower
+                    for term in [
+                        "upgrade",
+                        "migration",
+                        "plugin",
+                        "plugins",
+                        "module",
+                        "modules",
+                        "install",
+                        "setup",
+                        "build",
+                        "configure",
+                    ]
+                )
+
+                if needs_external:
+                    yield f"data: {json.dumps({'type': 'progress', 'message': '🕷️ Crawling external knowledge base...', 'step': 4, 'total': 5})}\n\n"
+                    time.sleep(0.2)
+
+                # Step 5: Generating response
+                yield f"data: {json.dumps({'type': 'progress', 'message': '🤖 Generating response...', 'step': 5, 'total': 5})}\n\n"
+
+                # Perform actual chat
+                response = chatbot.chat(question, max_sources, session_id)
+
+                # Format sources for frontend
+                sources_data = []
+                for source in response.sources:
+                    source_data = {
+                        "title": source.title,
+                        "content": source.content[:300] + "..."
+                        if len(source.content) > 300
+                        else source.content,
+                        "source": source.source,
+                        "relevance_score": source.relevance_score,
+                        "url": source.url,
+                        "metadata": source.metadata,
+                    }
+                    sources_data.append(source_data)
+
+                # Send final result
+                final_result = {
+                    "type": "result",
+                    "response": response.answer,
+                    "sources": sources_data,
+                    "confidence": response.confidence,
+                    "retrieval_metadata": response.retrieval_metadata,
+                    "model_used": response.model_used,
+                    "session_id": response.session_id,
+                }
+                yield f"data: {json.dumps(final_result)}\n\n"
+
+            except Exception as e:
+                error_result = {"type": "error", "error": f"Error: {str(e)}"}
+                yield f"data: {json.dumps(error_result)}\n\n"
+
+        response = Response(generate_progress(), mimetype="text/event-stream")
+        response.headers["Cache-Control"] = "no-cache"
+        response.headers["Connection"] = "keep-alive"
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in streaming chat endpoint: {str(e)}")
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
 
@@ -170,6 +329,52 @@ def stats_api():
         return jsonify(stats)
     except Exception as e:
         logger.error(f"Error getting stats: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations", methods=["GET"])
+def list_conversations_api():
+    """List recent conversation sessions."""
+    try:
+        limit = request.args.get("limit", 20, type=int)
+        sessions = chatbot.list_conversation_sessions(limit=limit)
+        return jsonify({"sessions": sessions})
+    except Exception as e:
+        logger.error(f"Error listing conversations: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations", methods=["POST"])
+def create_conversation_api():
+    """Create a new conversation session."""
+    try:
+        session_id = chatbot.create_conversation_session()
+        return jsonify({"session_id": session_id})
+    except Exception as e:
+        logger.error(f"Error creating conversation: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations/<session_id>/history", methods=["GET"])
+def get_conversation_history_api(session_id):
+    """Get conversation history for a specific session."""
+    try:
+        limit = request.args.get("limit", 50, type=int)
+        history = chatbot.get_conversation_history(session_id, limit=limit)
+        return jsonify({"history": history, "session_id": session_id})
+    except Exception as e:
+        logger.error(f"Error getting conversation history: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations/cleanup", methods=["POST"])
+def cleanup_conversations_api():
+    """Clean up old conversation sessions."""
+    try:
+        cleaned_count = chatbot.cleanup_old_conversations()
+        return jsonify({"cleaned_sessions": cleaned_count})
+    except Exception as e:
+        logger.error(f"Error cleaning up conversations: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 

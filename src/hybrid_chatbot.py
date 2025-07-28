@@ -108,7 +108,11 @@ class HybridRAGChatbot(RAGChatbot):
             self.external_llm = None
 
     def chat(
-        self, question: str, max_sources: int = 5, use_fallback: bool = True
+        self,
+        question: str,
+        max_sources: int = 5,
+        session_id: Optional[str] = None,
+        use_fallback: bool = True,
     ) -> ChatResponse:
         """
         Enhanced chat method with external API fallback.
@@ -116,6 +120,7 @@ class HybridRAGChatbot(RAGChatbot):
         Args:
             question: User's question
             max_sources: Maximum number of source documents
+            session_id: Optional session ID for conversation context
             use_fallback: Whether to use external API fallback on local model failure
 
         Returns:
@@ -123,7 +128,7 @@ class HybridRAGChatbot(RAGChatbot):
         """
         try:
             # Try local model first
-            response = super().chat(question, max_sources)
+            response = super().chat(question, max_sources, session_id)
 
             # Add fallback information to metadata
             response.retrieval_metadata["used_external_fallback"] = False
@@ -138,7 +143,9 @@ class HybridRAGChatbot(RAGChatbot):
 
             if use_fallback and self.external_llm:
                 logger.info("🔄 Falling back to external API...")
-                return self._chat_with_external_api(question, max_sources, str(e))
+                return self._chat_with_external_api(
+                    question, max_sources, str(e), session_id
+                )
             else:
                 # Return error response
                 logger.error("❌ No fallback available")
@@ -152,10 +159,15 @@ class HybridRAGChatbot(RAGChatbot):
                     },
                     confidence=0.0,
                     model_used="error",
+                    session_id=session_id,
                 )
 
     def _chat_with_external_api(
-        self, question: str, max_sources: int, local_error: str
+        self,
+        question: str,
+        max_sources: int,
+        local_error: str,
+        session_id: Optional[str] = None,
     ) -> ChatResponse:
         """
         Chat using external API as fallback.
@@ -164,6 +176,7 @@ class HybridRAGChatbot(RAGChatbot):
             question: User's question
             max_sources: Maximum number of source documents
             local_error: Error message from local model
+            session_id: Optional session ID for conversation context
 
         Returns:
             ChatResponse from external API

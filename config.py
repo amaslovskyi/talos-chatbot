@@ -24,11 +24,38 @@ class Settings(BaseSettings):
     ollama_embedding_model: str = "nomic-embed-text:latest"
     embedding_model: str = "all-MiniLM-L6-v2"  # Fallback for sentence-transformers
 
+    # Knowledge Base Configuration
+    # Documents directory (default local knowledge base)
+    documents_directory: str = "documents"
+
+    # Additional knowledge base paths (comma-separated)
+    additional_knowledge_paths: str = ""  # e.g., "/path/to/kb1,/path/to/kb2"
+
     # Corporate Portal Configuration
-    corporate_portal_url: str = "https://www.andrewng.org/"
+    corporate_portal_url: str = ""  # Configure in .env file
     corporate_portal_api_key: str = ""
     corporate_portal_username: str = ""
     corporate_portal_password: str = ""
+
+    # External URL Search Configuration
+    enable_external_url_search: bool = True
+    external_search_urls: str = (
+        "https://github.com/snort3/snort3"  # Comma-separated URLs
+    )
+    url_search_timeout: int = 15  # seconds (increased for advanced crawler)
+    url_fallback_threshold: float = 0.5  # minimum confidence to skip URL search
+    strict_knowledge_base_mode: bool = (
+        True  # Only answer from knowledge base, politely decline others
+    )
+
+    # Advanced Web Crawler Configuration
+    use_advanced_crawler: bool = (
+        True  # Use advanced crawler instead of simple URL search
+    )
+    max_crawl_depth: int = 2  # Maximum crawl depth for following links
+    max_content_length: int = 5000  # Maximum content length per result
+    extract_code_blocks: bool = True  # Extract code blocks from documentation
+    render_javascript: bool = False  # Render JavaScript (requires more resources)
 
     # External API Configuration (fallback when local models fail)
     enable_external_api_fallback: bool = True

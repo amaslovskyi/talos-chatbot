@@ -41,6 +41,45 @@ class DocumentLoader:
             separators=["\n\n", "\n", " ", ""],
         )
 
+    def load_all_knowledge_bases(self) -> List[LangChainDocument]:
+        """
+        Load documents from all configured knowledge base paths.
+
+        Returns:
+            List of LangChain Document objects from all knowledge bases.
+        """
+        all_documents = []
+
+        # Load from primary documents directory
+        primary_docs = self.load_documents(self.settings.documents_directory)
+        all_documents.extend(primary_docs)
+        logger.info(
+            f"Loaded {len(primary_docs)} documents from primary directory: {self.settings.documents_directory}"
+        )
+
+        # Load from additional knowledge base paths
+        if self.settings.additional_knowledge_paths:
+            additional_paths = [
+                path.strip()
+                for path in self.settings.additional_knowledge_paths.split(",")
+                if path.strip()
+            ]
+
+            for path in additional_paths:
+                if os.path.exists(path):
+                    kb_docs = self.load_documents(path)
+                    all_documents.extend(kb_docs)
+                    logger.info(
+                        f"Loaded {len(kb_docs)} documents from knowledge base: {path}"
+                    )
+                else:
+                    logger.warning(f"Knowledge base path does not exist: {path}")
+
+        logger.info(
+            f"Total documents loaded from all knowledge bases: {len(all_documents)}"
+        )
+        return all_documents
+
     def load_documents(
         self, directory: Optional[str] = None
     ) -> List[LangChainDocument]:
