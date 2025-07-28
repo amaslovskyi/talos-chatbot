@@ -110,8 +110,22 @@ class RetrievalEngine:
             "confidence_scores": [],
         }
 
-        # Step 1: Search local vector store
-        local_results = self._search_local_documents(query, max_results)
+        # Step 1: Search local vector store (dynamic limit based on collection size)
+        collection_stats = self.vector_store.get_collection_stats()
+        doc_count = collection_stats.get("document_count", 0)
+
+        # Dynamic local search limit based on knowledge base size
+        if doc_count < 20:
+            local_search_limit = min(max_results, 3)  # Small KB: conservative
+        elif doc_count < 100:
+            local_search_limit = min(max_results, 8)  # Medium KB: moderate
+        else:
+            local_search_limit = min(max_results, 15)  # Large KB: comprehensive
+
+        logger.info(
+            f"📚 Knowledge base size: {doc_count} docs, searching {local_search_limit} local results"
+        )
+        local_results = self._search_local_documents(query, local_search_limit)
         retrieval_metadata["local_results_count"] = len(local_results)
 
         # Step 2: Evaluate local results confidence
@@ -195,11 +209,22 @@ class RetrievalEngine:
                 logger.info("No documents in vector store, skipping local search")
                 return []
 
-            # Search vector store
+            # Search vector store (dynamic threshold based on KB size)
+            collection_stats = self.vector_store.get_collection_stats()
+            doc_count = collection_stats.get("document_count", 0)
+
+            # Dynamic similarity threshold - be more selective with larger KBs
+            if doc_count < 20:
+                sim_threshold = 0.05  # Small KB: lower threshold (keep more results)
+            elif doc_count < 100:
+                sim_threshold = 0.1  # Medium KB: moderate threshold
+            else:
+                sim_threshold = 0.15  # Large KB: higher threshold (more selective)
+
             docs_with_scores = self.vector_store.similarity_search(
                 query=query,
                 k=max_results,
-                similarity_threshold=0.0,  # Get all results for confidence evaluation
+                similarity_threshold=sim_threshold,
             )
 
             # Convert to RetrievalResult objects
@@ -353,6 +378,13 @@ class RetrievalEngine:
         if not getattr(self.settings, "enable_external_url_search", True):
             return False
 
+        # Skip external search for very short/generic queries (speed optimization)
+        if len(query.split()) < 3:
+            logger.info(
+                "🚀 Skipping external search for short query (speed optimization)"
+            )
+            return False
+
         # Use URL fallback only if:
         # 1. No results at all, OR
         # 2. All results have very low confidence scores (below threshold)
@@ -414,18 +446,30 @@ class RetrievalEngine:
             ]
         )
 
+        # Dynamic external search logic based on knowledge base size
+        collection_stats = self.vector_store.get_collection_stats()
+        doc_count = collection_stats.get("document_count", 0)
+
+        # Adjust thresholds based on KB size
+        if doc_count < 20:
+            min_results_threshold = 2  # Small KB: low threshold
+        elif doc_count < 100:
+            min_results_threshold = 3  # Medium KB: moderate threshold
+        else:
+            min_results_threshold = 5  # Large KB: higher threshold
+
         # Only use external URLs when:
         # 1. No results at all, OR
-        # 2. Very few results AND it's a specialized query that likely needs external documentation
+        # 2. Too few results AND it's a specialized query that likely needs external documentation
         if not current_results:
             logger.info("📊 No local/portal results found")
             should_search_urls = True
-        elif len(current_results) < 2 and is_specialized_query:
+        elif len(current_results) < min_results_threshold and is_specialized_query:
             logger.info(
-                "📊 Too few results for specialized query - checking external sources"
+                f"📊 Too few results ({len(current_results)} < {min_results_threshold}) for specialized query - checking external sources"
             )
             should_search_urls = True
-        elif avg_confidence < 0.3 and is_specialized_query:
+        elif avg_confidence < 0.5 and is_specialized_query:
             logger.info(
                 f"📊 Low confidence ({avg_confidence:.2f}) for specialized query - checking external sources"
             )
@@ -547,11 +591,13 @@ class RetrievalEngine:
 
             # Use unified crawler manager if available and enabled
             if self.use_crawler_manager and self.crawler_manager:
+                # Limit to fewer URLs for faster response
+                limited_urls = external_urls[:2]  # Max 2 URLs for speed
                 logger.info(
-                    f"🕷️ Using unified crawler manager for {len(external_urls)} URLs"
+                    f"🕷️ Using unified crawler manager for {len(limited_urls)} URLs"
                 )
                 crawl_results = self.crawler_manager.crawl_urls(
-                    external_urls, query, max_results
+                    limited_urls, query, max_results
                 )
 
                 # Convert UnifiedCrawlResult to RetrievalResult

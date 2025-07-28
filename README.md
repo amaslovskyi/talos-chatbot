@@ -84,10 +84,20 @@ The system now uses **specialized crawlers** with intelligent URL routing:
 
 ### **🚀 Search Strategy & Performance**
 - **Local-First Approach**: Always searches local documents first, only uses external sources when truly needed
+- **Smart Scaling Architecture**: Automatically adapts performance based on knowledge base size:
+  - **Small KB (< 20 docs)**: 3 local results, 0.05 similarity threshold, < 2 results trigger external
+  - **Medium KB (20-100 docs)**: 8 local results, 0.10 similarity threshold, < 3 results trigger external  
+  - **Large KB (100+ docs)**: 15 local results, 0.15 similarity threshold, < 5 results trigger external
+- **Advanced Speed Optimizations**: 
+  - **Early termination** when sufficient results found (5 general, 3 build-specific)
+  - **Query-specific file prioritization** (BUILD.md, INSTALL.md before README.md)
+  - **Limited external crawling** (max 2 URLs, 50 files per repo instead of 138)
+  - **Short query filtering** (skips external search for < 3 words)
+  - **Reduced timeouts** (10s GitHub, 15s general web)
 - **Conservative Fallback**: External search triggers only when:
   - No local results found, OR
-  - Very few results (< 2) for specialized queries, OR
-  - Low confidence (< 0.3) for technical documentation needs
+  - Too few results for specialized queries (dynamic threshold), OR
+  - Low confidence (< 0.5) for technical documentation needs
 - **Progress Indicators**: Real-time visual feedback during external searches
 - **Rate Limit Handling**: Intelligent GitHub API usage with fallback strategies
 
@@ -566,22 +576,28 @@ Once running, the system:
 | **Max Context Messages** | 10                           | Maximum messages included in context    |
 | **Session ID Format**    | UUID4                        | Unique identifier format for sessions   |
 
-### **🧠 Enhanced Retrieval Logic with Advanced Crawling**
+### **🧠 Enhanced Retrieval Logic with Advanced Crawling & Smart Scaling**
 
-The system uses sophisticated retrieval logic with conversation awareness and comprehensive external search:
+The system uses sophisticated retrieval logic with conversation awareness, comprehensive external search, and automatic performance scaling:
 
 1. **Conversation Context**: Retrieve recent conversation history for context
 2. **Query Enhancement**: Enhance short queries with conversation keywords from history
-3. **Local-First Search**: Query all configured knowledge bases (primary + additional directories)
+3. **Dynamic Local Search**: Query all configured knowledge bases with intelligent scaling:
+   - **Small KB (< 20 docs)**: Conservative search with 3 results, 0.05 threshold
+   - **Medium KB (20-100 docs)**: Balanced search with 8 results, 0.10 threshold
+   - **Large KB (100+ docs)**: Comprehensive search with 15 results, 0.15 threshold
 4. **Confidence Evaluation**: Analyze result quality and relevance scores across all local sources
-5. **Smart Fallback Decision**: Use external crawler only when:
+5. **Smart Fallback Decision**: Use external crawler only when truly needed:
    - No local results found, OR
-   - Very few results (< 2) for specialized queries (upgrade, plugin, build), OR
-   - Low confidence (< 0.3) for technical documentation needs
-6. **Advanced External Crawling**: If triggered:
-   - Discover ALL files in external repositories (not just README)
+   - Too few results for specialized queries (dynamic threshold based on KB size), OR
+   - Low confidence (< 0.5) for technical documentation needs
+   - Skip external search for very short queries (< 3 words) for speed
+6. **Optimized External Crawling**: If triggered:
+   - **Early termination**: Stop at 5 general results or 3 build-specific results
+   - **File prioritization**: Check BUILD.md, INSTALL.md before general README files
+   - **Limited scope**: Process max 50 files per repo (down from 138) and 2 URLs max
+   - **Faster timeouts**: 10s for GitHub, 15s for general web crawling
    - Use 7+ specialized libraries for robust content extraction
-   - Prioritize query-specific documentation (upgrade guides, plugin docs, build instructions)
    - Extract up to 15,000 characters of relevant technical content
 7. **Comprehensive Response Generation**: 
    - Combine local and external content with conversation context
@@ -610,7 +626,7 @@ talos-chatbot/
 │   ├── conversation_memory.py  # Conversation memory and session management
 │   ├── document_loader.py      # Document processing with multi-KB support
 │   ├── vector_store.py         # ChromaDB vector operations
-│   ├── retrieval.py           # Enhanced retrieval logic with advanced crawling
+│   ├── retrieval.py           # Enhanced retrieval logic with smart scaling & speed optimizations
 │   ├── corporate_portal.py    # Corporate portal integration
 │   ├── ollama_embeddings.py   # Ollama embedding integration
 │   ├── auto_indexer.py        # Automatic document indexing (multi-directory)
@@ -830,6 +846,36 @@ Response:
     pip install chromadb sentence-transformers watchdog
     ```
 
+11. **Slow response times with large knowledge base**
+    ```bash
+    # Check knowledge base size - system auto-optimizes
+    python main.py status
+    
+    # For 100+ documents, the system automatically:
+    # - Increases similarity threshold to 0.15
+    # - Limits local search to 15 results
+    # - Requires 5+ results before external search
+    
+    # Manual optimization for very large KBs (1000+ docs)
+    export SIMILARITY_THRESHOLD=0.20
+    export MAX_DOCS_TO_RETRIEVE=10
+    ```
+
+12. **External search taking too long**
+    ```bash
+    # System automatically limits external search:
+    # - Max 2 URLs processed
+    # - Max 50 files per repository  
+    # - 10s timeout for GitHub API
+    # - Skips external search for short queries
+    
+    # To disable external search entirely
+    export ENABLE_EXTERNAL_URL_SEARCH=false
+    
+    # To reduce external search threshold (less aggressive)
+    export URL_FALLBACK_THRESHOLD=0.7
+    ```
+
 ### Debug Mode
 
 Enable debug logging for detailed troubleshooting:
@@ -840,10 +886,58 @@ python main.py --debug web
 
 ## 📈 Performance Optimization
 
+### **🚀 Automatic Performance Scaling**
+The system automatically optimizes performance based on your knowledge base size:
+
+#### **📚 Small Knowledge Base (< 20 documents)**
+- **Local Search**: 3 results maximum (fast, focused)
+- **Similarity Threshold**: 0.05 (inclusive, keeps more results)
+- **External Trigger**: < 2 results for specialized queries
+- **Target Use Case**: Personal projects, small teams
+
+#### **📊 Medium Knowledge Base (20-100 documents)**  
+- **Local Search**: 8 results maximum (balanced)
+- **Similarity Threshold**: 0.10 (moderate selectivity)
+- **External Trigger**: < 3 results for specialized queries
+- **Target Use Case**: Department knowledge bases, project documentation
+
+#### **🏢 Large Knowledge Base (100+ documents)**
+- **Local Search**: 15 results maximum (comprehensive)
+- **Similarity Threshold**: 0.15 (high selectivity, quality over quantity)
+- **External Trigger**: < 5 results for specialized queries
+- **Target Use Case**: Enterprise knowledge bases, extensive documentation
+
+### **⚡ Speed Optimizations**
+- **Early Termination**: Stops crawling when sufficient results found
+- **Query-Specific Prioritization**: BUILD.md and INSTALL.md checked before README.md
+- **Limited External Scope**: Max 2 URLs and 50 files per repository (down from 138)
+- **Short Query Filtering**: Skips external search for queries < 3 words
+- **Reduced Timeouts**: 10s GitHub API, 15s general web requests
+- **Smart Caching**: Repository results cached for 5 minutes
+
+### **🎯 General Performance Tips**
 - **Document Indexing**: Index documents once, query many times
 - **Chunk Size**: Balance between context and retrieval speed
 - **Similarity Threshold**: Higher thresholds reduce false positives
 - **Corporate Portal**: Cache results to reduce external API calls
+- **File Organization**: Use descriptive filenames for better retrieval
+- **Query Specificity**: More specific queries get better, faster results
+
+### **⏱️ Expected Response Times**
+Performance varies based on knowledge base size and query complexity:
+
+- **Small KB (< 20 docs)**: 2-5 seconds typical
+- **Medium KB (20-100 docs)**: 3-8 seconds typical  
+- **Large KB (100+ docs)**: 5-15 seconds typical
+- **With External Search**: Add 10-30 seconds for specialized queries
+- **Build/Install Queries**: Faster due to file prioritization (BUILD.md first)
+
+**Factors affecting speed:**
+- ✅ **Local documents only**: Fastest (2-8s)
+- ⚡ **Short queries** (< 3 words): Skip external search automatically
+- 🔍 **Specialized queries** (build, install, upgrade): Optimized file prioritization
+- 🌐 **External search triggered**: Slower but comprehensive (15-45s total)
+- 🕷️ **Large repositories**: Limited to 50 files for speed
 
 ## 🤝 Contributing
 
@@ -871,4 +965,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**Need help?** Check the troubleshooting section or create an issue on GitHub. 
+**Need help?** Check the troubleshooting section or create an issue on GitHub.

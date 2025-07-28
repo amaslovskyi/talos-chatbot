@@ -10,6 +10,7 @@ import logging
 import re
 import asyncio
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional, Tuple, Set
 from urllib.parse import urlparse, urljoin, quote
 from dataclasses import dataclass
@@ -91,11 +92,17 @@ class GitHubCrawler:
         else:
             self.html_session = None
 
-        # Configure timeouts and limits
-        self.timeout = getattr(self.settings, "url_search_timeout", 15)
+        # Configure timeouts and limits (optimized for speed)
+        self.timeout = getattr(
+            self.settings, "url_search_timeout", 10
+        )  # Reduced for faster responses
         self.max_crawl_depth = 2
         self.max_links_per_page = 10
         self.crawled_urls: Set[str] = set()
+
+        # Add simple cache for faster responses
+        self._repo_cache = {}
+        self._cache_timeout = 300  # 5 minutes
 
         logger.info(
             f"Advanced crawler initialized with libraries: "
@@ -208,17 +215,22 @@ class GitHubCrawler:
             wiki_results = self._crawl_github_wiki(owner, repo, query)
             results.extend(wiki_results)
 
-            # 4. Comprehensive repository file discovery
-            comprehensive_results = self._crawl_all_repository_files(owner, repo, query)
-            results.extend(comprehensive_results)
+            # 4. Fast comprehensive file discovery (limited scope)
+            if len(results) < 3:  # Only if we need more results
+                comprehensive_results = self._crawl_all_repository_files(
+                    owner, repo, query, max_files=50
+                )
+                results.extend(comprehensive_results)
 
-            # 5. Search for relevant files via GitHub API (as fallback)
-            api_results = self._search_github_api_content(owner, repo, query)
-            results.extend(api_results)
+            # Early termination if we have enough good results
+            if len(results) >= 5:
+                logger.info(f"🎯 Early termination: found {len(results)} results")
+                return results
 
-            # 6. Search for relevant code files and issues
-            search_results = self._search_github_content(owner, repo, query)
-            results.extend(search_results)
+            # 5. Search for relevant files via GitHub API (only if still need more)
+            if len(results) < 4:
+                api_results = self._search_github_api_content(owner, repo, query)
+                results.extend(api_results)
 
         except Exception as e:
             logger.error(f"Error crawling GitHub repository {repo_url}: {str(e)}")
@@ -311,7 +323,7 @@ class GitHubCrawler:
         return results
 
     def _crawl_all_repository_files(
-        self, owner: str, repo: str, query: str
+        self, owner: str, repo: str, query: str, max_files: int = 138
     ) -> List[CrawlResult]:
         """Comprehensively crawl all files in a GitHub repository."""
         results = []
@@ -324,8 +336,11 @@ class GitHubCrawler:
             # Generate comprehensive file paths based on common repository structures
             candidate_files = self._generate_comprehensive_file_paths(query)
 
+            # Limit files to process for speed
+            candidate_files = candidate_files[:max_files]
+
             logger.info(
-                f"📁 Checking {len(candidate_files)} potential documentation files"
+                f"📁 Checking {len(candidate_files)} potential documentation files (limited to {max_files})"
             )
 
             processed_count = 0
@@ -370,6 +385,36 @@ class GitHubCrawler:
                             logger.info(
                                 f"📄 Added {file_path} (relevance: {relevance:.3f})"
                             )
+
+                            # Query-specific early termination for better speed
+                            query_lower = query.lower()
+                            is_build_query = any(
+                                term in query_lower
+                                for term in [
+                                    "build",
+                                    "install",
+                                    "setup",
+                                    "compile",
+                                    "download",
+                                ]
+                            )
+
+                            if is_build_query and any(
+                                build_file in file_path.lower()
+                                for build_file in ["build", "install", "setup"]
+                            ):
+                                if (
+                                    found_count >= 3
+                                ):  # Earlier exit for build queries with relevant files
+                                    logger.info(
+                                        f"🎯 Quick exit: found {found_count} build-specific files"
+                                    )
+                                    break
+                            elif found_count >= 10:  # Regular early termination
+                                logger.info(
+                                    f"🚀 Early termination: found {found_count} relevant files"
+                                )
+                                break
 
                 except Exception as e:
                     # File doesn't exist or can't be accessed - this is normal
@@ -441,21 +486,21 @@ class GitHubCrawler:
         """Generate comprehensive list of potential documentation file paths."""
         query_lower = query.lower()
 
-        # Base documentation files
+        # Base documentation files (prioritized for build queries)
         base_files = [
-            "README.md",
-            "README.txt",
-            "README.rst",
-            "INSTALL.md",
-            "INSTALL.txt",
-            "INSTALL",
             "BUILD.md",
             "BUILD.txt",
             "BUILDING.md",
+            "INSTALL.md",
+            "INSTALL.txt",
+            "INSTALL",
             "SETUP.md",
             "SETUP.txt",
             "CONFIGURE.md",
             "CONFIGURATION.md",
+            "README.md",  # Moved down as it's often too general
+            "README.txt",
+            "README.rst",
             "CHANGELOG.md",
             "CHANGELOG.txt",
             "ChangeLog.md",
