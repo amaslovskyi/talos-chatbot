@@ -107,12 +107,51 @@ EXTERNAL_API_KEY=your_external_api_key_here
 EXTERNAL_API_MODEL=gpt-3.5-turbo
 
 # =========================
+# Knowledge Base Configuration
+# =========================
+# Primary documents directory
+DOCUMENTS_DIRECTORY=documents
+
+# Additional knowledge base paths (comma-separated)
+# Example: ADDITIONAL_KNOWLEDGE_PATHS=/path/to/kb1,/path/to/kb2
+ADDITIONAL_KNOWLEDGE_PATHS=
+
+# =========================
 # Corporate Portal Configuration
 # =========================
-CORPORATE_PORTAL_URL=https://github.com/snort3/snort3/
+# Leave empty if not using corporate portal, or set to your organization's portal
+CORPORATE_PORTAL_URL=
 CORPORATE_PORTAL_API_KEY=your_portal_api_key_here
 CORPORATE_PORTAL_USERNAME=your_username
 CORPORATE_PORTAL_PASSWORD=your_password
+
+# =========================
+# External URL Search Configuration
+# =========================
+# Enable fallback search of external URLs when local docs don't have info
+ENABLE_EXTERNAL_URL_SEARCH=true
+# Comma-separated list of URLs to search (GitHub repos, documentation sites, etc.)
+EXTERNAL_SEARCH_URLS=https://github.com/snort3/snort3,https://snort.org/documents
+# Timeout for URL requests in seconds (increased for advanced crawler)
+URL_SEARCH_TIMEOUT=15
+# Confidence threshold - if local results are above this, skip URL search
+URL_FALLBACK_THRESHOLD=0.5
+# Strict mode - only answer from knowledge base, politely decline unrelated questions
+STRICT_KNOWLEDGE_BASE_MODE=true
+
+# =========================
+# Advanced Web Crawler Configuration
+# =========================
+# Use advanced crawler with multiple extraction libraries for better content
+USE_ADVANCED_CRAWLER=true
+# Maximum depth to follow links when crawling
+MAX_CRAWL_DEPTH=2
+# Maximum content length per crawled result
+MAX_CONTENT_LENGTH=5000
+# Extract code blocks and examples from documentation
+EXTRACT_CODE_BLOCKS=true
+# Render JavaScript content (requires more resources, set to false for faster crawling)
+RENDER_JAVASCRIPT=false
 
 # =========================
 # Document Processing

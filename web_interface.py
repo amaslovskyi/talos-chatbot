@@ -8,7 +8,14 @@ MIT License - Copyright (c) 2025 talos-chatbot
 import os
 import logging
 from typing import Dict, Any
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import (
+    Flask,
+    render_template,
+    request,
+    jsonify,
+    send_from_directory,
+    Response,
+)
 from flask_cors import CORS
 
 from src.chatbot import create_chatbot, RAGChatbot
@@ -162,6 +169,109 @@ def chat_api():
 
     except Exception as e:
         logger.error(f"Error in chat API: {str(e)}")
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+
+@app.route("/chat-stream", methods=["POST"])
+def chat_stream():
+    """Handle streaming chat requests with real-time progress updates."""
+    import json
+    import time
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        question = data.get("message") or data.get("question")
+        if not question:
+            return jsonify({"error": "No message provided"}), 400
+
+        question = question.strip()
+        max_sources = data.get("max_sources", 5)
+        session_id = data.get("session_id")
+
+        def generate_progress():
+            try:
+                # Step 1: Starting
+                yield f"data: {json.dumps({'type': 'progress', 'message': '🔍 Starting search...', 'step': 1, 'total': 5})}\n\n"
+                time.sleep(0.1)
+
+                # Step 2: Local search
+                yield f"data: {json.dumps({'type': 'progress', 'message': '📄 Searching local documents...', 'step': 2, 'total': 5})}\n\n"
+                time.sleep(0.1)
+
+                # Step 3: Check if external search needed
+                yield f"data: {json.dumps({'type': 'progress', 'message': '🌐 Checking for additional sources...', 'step': 3, 'total': 5})}\n\n"
+                time.sleep(0.1)
+
+                # Step 4: External search (if needed)
+                query_lower = question.lower()
+                needs_external = any(
+                    term in query_lower
+                    for term in [
+                        "upgrade",
+                        "migration",
+                        "plugin",
+                        "plugins",
+                        "module",
+                        "modules",
+                        "install",
+                        "setup",
+                        "build",
+                        "configure",
+                    ]
+                )
+
+                if needs_external:
+                    yield f"data: {json.dumps({'type': 'progress', 'message': '🕷️ Crawling external knowledge base...', 'step': 4, 'total': 5})}\n\n"
+                    time.sleep(0.2)
+
+                # Step 5: Generating response
+                yield f"data: {json.dumps({'type': 'progress', 'message': '🤖 Generating response...', 'step': 5, 'total': 5})}\n\n"
+
+                # Perform actual chat
+                response = chatbot.chat(question, max_sources, session_id)
+
+                # Format sources for frontend
+                sources_data = []
+                for source in response.sources:
+                    source_data = {
+                        "title": source.title,
+                        "content": source.content[:300] + "..."
+                        if len(source.content) > 300
+                        else source.content,
+                        "source": source.source,
+                        "relevance_score": source.relevance_score,
+                        "url": source.url,
+                        "metadata": source.metadata,
+                    }
+                    sources_data.append(source_data)
+
+                # Send final result
+                final_result = {
+                    "type": "result",
+                    "response": response.answer,
+                    "sources": sources_data,
+                    "confidence": response.confidence,
+                    "retrieval_metadata": response.retrieval_metadata,
+                    "model_used": response.model_used,
+                    "session_id": response.session_id,
+                }
+                yield f"data: {json.dumps(final_result)}\n\n"
+
+            except Exception as e:
+                error_result = {"type": "error", "error": f"Error: {str(e)}"}
+                yield f"data: {json.dumps(error_result)}\n\n"
+
+        response = Response(generate_progress(), mimetype="text/event-stream")
+        response.headers["Cache-Control"] = "no-cache"
+        response.headers["Connection"] = "keep-alive"
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in streaming chat endpoint: {str(e)}")
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
 

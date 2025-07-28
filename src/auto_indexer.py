@@ -65,17 +65,43 @@ class AutoIndexer:
             return ""
 
     def scan_for_documents(self) -> List[Path]:
-        """Scan documents directory for supported files."""
-        docs_dir = Path(self.settings.docs_directory)
-        if not docs_dir.exists():
-            return []
-
+        """Scan all configured knowledge base directories for supported files."""
         supported_extensions = {".pdf", ".docx", ".txt", ".md", ".html"}
         documents = []
 
-        for file_path in docs_dir.rglob("*"):
-            if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
-                documents.append(file_path)
+        # Scan primary documents directory
+        docs_dir = Path(self.settings.documents_directory)
+        if docs_dir.exists():
+            for file_path in docs_dir.rglob("*"):
+                if (
+                    file_path.is_file()
+                    and file_path.suffix.lower() in supported_extensions
+                ):
+                    documents.append(file_path)
+        else:
+            logger.warning(f"Primary documents directory does not exist: {docs_dir}")
+
+        # Scan additional knowledge base paths
+        if self.settings.additional_knowledge_paths:
+            additional_paths = [
+                path.strip()
+                for path in self.settings.additional_knowledge_paths.split(",")
+                if path.strip()
+            ]
+
+            for path in additional_paths:
+                kb_dir = Path(path)
+                if kb_dir.exists():
+                    for file_path in kb_dir.rglob("*"):
+                        if (
+                            file_path.is_file()
+                            and file_path.suffix.lower() in supported_extensions
+                        ):
+                            documents.append(file_path)
+                else:
+                    logger.warning(
+                        f"Additional knowledge base path does not exist: {kb_dir}"
+                    )
 
         return documents
 

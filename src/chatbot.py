@@ -116,48 +116,61 @@ class RAGChatbot:
     def _init_prompt_templates(self):
         """Initialize prompt templates for different scenarios."""
 
-        # Main RAG prompt template - More conversational and user-friendly
+        # Main RAG prompt template - Comprehensive responses from knowledge base
         self.rag_prompt_template = PromptTemplate(
             input_variables=["context", "question"],
-            template="""You are a document assistant that ONLY provides information from the user's documents. You must be friendly and conversational, but you can ONLY use the information provided below. DO NOT add external knowledge or general information.
+            template="""You are a specialized technical documentation assistant that provides comprehensive, detailed information from the configured knowledge base sources. You must be thorough and provide in-depth answers while strictly adhering to the provided information.
 
-📄 **Information from your documents:**
+📚 **Available information sources:**
 {context}
 
 ❓ **Question:** {question}
 
-**CRITICAL:** Answer ONLY based on the information provided above. Do not add external knowledge.
+**CRITICAL:** Answer ONLY based on the information provided above. Do not add external knowledge or general information from outside these sources.
 
-Please provide a helpful answer following these guidelines:
-• 🎯 **Be conversational and friendly** - but stick to document content only
-• 📝 **Use clear structure** - bullet points, short paragraphs, emojis for readability  
-• 📚 **Reference sources naturally** - "According to your document..." or "I found that..."
-• 💡 **Focus on what's in the documents** - don't add external explanations
-• 🤔 **Be honest about limitations** - if info is incomplete in documents, say so
-• 🚫 **Never add general knowledge** - only use the provided document content
+Please provide a COMPREHENSIVE and DETAILED answer following these guidelines:
+• 🎯 **Be thorough and comprehensive** - provide detailed explanations with step-by-step instructions when available
+• 📝 **Use detailed structure** - create well-organized sections with headers, bullet points, numbered steps, and code examples
+• 📚 **Quote extensively from sources** - include specific details, commands, and instructions from the provided sources
+• 🌐 **External sources integration** - when using external sources, provide the specific URL and integrate the detailed information
+• 💡 **Combine all relevant information** - synthesize information from multiple sources to provide complete answers
+• 🔧 **Include technical details** - provide specific commands, file paths, configuration options, and technical specifications
+• 📜 **Extract exact commands** - when sources contain build scripts, installation commands, or configuration scripts (like configure_cmake.sh), quote them exactly as they appear in ```shell``` code blocks or other formatted sections
+• 📋 **Create actionable guides** - organize information into clear, actionable steps that users can follow
+• 🔗 **Provide direct links** - include clickable URLs for further reading and reference
+• 📖 **Expand on examples** - if the sources contain examples, explain them in detail
+• 🚫 **Never add general knowledge** - only use information explicitly provided in the sources above
 
-💬 **Answer based ONLY on the documents:**""",
+**Response Structure Requirements:**
+- Start with a brief overview
+- Provide detailed step-by-step instructions when applicable
+- Include code examples or commands when available in sources (look for ```shell``` blocks and extract them exactly)
+- When sources contain specific commands like ./configure_cmake.sh, export statements, or make commands, include them verbatim
+- End with additional resources and links for further reading
+- Aim for comprehensive coverage of the topic
+
+💬 **Your comprehensive, detailed answer based ONLY on the provided sources:**""",
         )
 
         # Fallback prompt when no relevant documents found
         self.fallback_prompt_template = PromptTemplate(
             input_variables=["question"],
-            template="""You are a document assistant that ONLY provides information from the user's uploaded documents and corporate portal. You cannot provide general knowledge or external information.
+            template="""You are a specialized document assistant that ONLY provides information from the configured knowledge base (uploaded documents and specified external sources).
 
 ❓ **Question:** {question}
 
-🔍 **What happened:** I searched through your documents and corporate portal but couldn't find any information about this topic.
+🔍 **What happened:** I searched through the available knowledge base but couldn't find any relevant information about this topic.
 
-**IMPORTANT:** You must ONLY respond based on the user's documents and corporate portal. DO NOT provide general knowledge, external information, or suggestions to look elsewhere.
+**IMPORTANT:** You must ONLY respond about topics covered in the knowledge base. DO NOT provide general knowledge or information from outside the configured sources.
 
 Please respond following these strict guidelines:
-• 😊 **Be friendly but clear** - explain that no information was found in their sources
-• 🚫 **Do NOT provide general knowledge** - only mention what you searched
-• 📄 **Be specific about sources searched** - mention documents and corporate portal
-• 🤝 **Offer to help with other questions** about their actual documents
-• 💡 **Suggest they add more documents** if they want information on this topic
+• 😊 **Be polite and friendly** - but clearly state the limitation
+• 🚫 **Do NOT provide general knowledge** - only mention what sources were searched
+• 📄 **Be specific about knowledge base** - mention documents and configured external sources
+• 🤝 **Offer to help with topics that ARE in the knowledge base**
+• 💡 **Suggest they add relevant documents** if they want coverage of this topic
 
-💬 **Response:**""",
+💬 **Polite response explaining the limitation:**""",
         )
 
     def chat(
@@ -182,7 +195,12 @@ Please respond following these strict guidelines:
                 session_id = self.conversation_memory.create_session()
 
             # Add user message to conversation history
-            self.conversation_memory.add_message(session_id, "user", question)
+            if not self.conversation_memory.add_message(session_id, "user", question):
+                logger.warning(
+                    f"Failed to add message to session {session_id}, creating new session"
+                )
+                session_id = self.conversation_memory.create_session()
+                self.conversation_memory.add_message(session_id, "user", question)
 
             # Step 2: Get conversation context for enhanced understanding
             conversation_context = self.conversation_memory.get_conversation_context(
@@ -317,15 +335,37 @@ Please respond following these strict guidelines:
         # Prepare context from sources in a more natural format
         context_parts = []
         for i, source in enumerate(sources, 1):
-            # Create a more user-friendly source description
-            doc_name = (
-                source.title.replace(".pdf", "")
-                .replace(".docx", "")
-                .replace(".txt", "")
-            )
-            source_info = (
-                f"📄 **From {doc_name}** (relevance: {source.relevance_score:.0%}):"
-            )
+            # Handle different source types with appropriate icons and descriptions
+            if source.source.startswith("external_url_github"):
+                icon = "🌐"
+                source_type = "GitHub"
+                doc_name = source.title
+                if source.url:
+                    source_info = f"{icon} **From {source_type} - {doc_name}** (relevance: {source.relevance_score:.0%}):\n🔗 {source.url}"
+                else:
+                    source_info = f"{icon} **From {source_type} - {doc_name}** (relevance: {source.relevance_score:.0%}):"
+            elif source.source.startswith("external_url_"):
+                icon = "🌐"
+                source_type = "External Web Source"
+                doc_name = source.title
+                if source.url:
+                    source_info = f"{icon} **From {source_type} - {doc_name}** (relevance: {source.relevance_score:.0%}):\n🔗 {source.url}"
+                else:
+                    source_info = f"{icon} **From {source_type} - {doc_name}** (relevance: {source.relevance_score:.0%}):"
+            elif source.source == "corporate_portal":
+                icon = "🏢"
+                doc_name = source.title
+                source_info = f"{icon} **From Corporate Portal - {doc_name}** (relevance: {source.relevance_score:.0%}):"
+            else:
+                # Local document
+                icon = "📄"
+                doc_name = (
+                    source.title.replace(".pdf", "")
+                    .replace(".docx", "")
+                    .replace(".txt", "")
+                )
+                source_info = f"{icon} **From {doc_name}** (relevance: {source.relevance_score:.0%}):"
+
             content = source.content[:600]  # Shorter content for better readability
             context_parts.append(f"{source_info}\n{content}...\n")
 
@@ -342,9 +382,9 @@ Please respond following these strict guidelines:
             conversation_summary = "\n".join(recent_exchanges)
 
             # Use enhanced prompt template with conversation context
-            prompt = f"""You are a document assistant that ONLY provides information from the user's documents. You have access to previous conversation context to better understand follow-up questions.
+            prompt = f"""You are a specialized document assistant that ONLY provides information from the configured knowledge base sources. You have access to previous conversation context to better understand follow-up questions.
 
-📄 **Information from your documents:**
+📚 **Available information sources:**
 {context}
 
 🗣️ **Recent conversation context:**
@@ -352,17 +392,19 @@ Please respond following these strict guidelines:
 
 ❓ **Current question:** {question}
 
-**CRITICAL:** Answer ONLY based on the document information provided above. Use the conversation context to understand the question better, but do not add external knowledge.
+**CRITICAL:** Answer ONLY based on the information provided above. Do not add external knowledge or general information from outside these sources.
 
-Please provide a helpful answer following these guidelines:
+Please provide a helpful answer following these strict guidelines:
 • 🎯 **Consider conversation context** - if this seems like a follow-up question, acknowledge the connection
 • 📝 **Use clear structure** - bullet points, short paragraphs, emojis for readability  
-• 📚 **Reference sources naturally** - "According to your document..." or "I found that..."
-• 💡 **Focus on what's in the documents** - don't add external explanations
-• 🤔 **Be honest about limitations** - if info is incomplete in documents, say so
-• 🚫 **Never add general knowledge** - only use the provided document content
+• 📚 **Reference sources naturally** - clearly indicate which specific source each piece of information comes from
+• 🌐 **External sources note** - if using external sources, mention the specific URL and that it's from the configured knowledge base
+• 💡 **Stay within knowledge base** - only combine information from the sources provided above
+• 🤔 **Be honest about limitations** - if information is incomplete in the provided sources, say so clearly
+• 🔗 **Include relevant links** - when referencing external sources, include the URL
+• 🚫 **Never add general knowledge** - do not supplement with information not in the sources above
 
-💬 **Answer based ONLY on the documents:**"""
+💬 **Answer based ONLY on the provided sources:**"""
         else:
             # Standard prompt for first message or no context
             prompt = self.rag_prompt_template.format(context=context, question=question)
@@ -381,6 +423,7 @@ Please provide a helpful answer following these guidelines:
     ) -> tuple[str, float]:
         """
         Generate fallback response when no relevant documents found.
+        Provides a polite but clear limitation message.
 
         Args:
             question: User's question.
@@ -389,34 +432,14 @@ Please provide a helpful answer following these guidelines:
         Returns:
             Tuple of (answer, confidence_score).
         """
-        if conversation_context and len(conversation_context) > 1:
-            # Include conversation context in fallback response
-            recent_exchanges = []
-            for msg in conversation_context[-3:]:  # Last 3 messages
-                role_indicator = "User" if msg["role"] == "user" else "Assistant"
-                recent_exchanges.append(f"{role_indicator}: {msg['content'][:80]}")
-
-            conversation_summary = "\n".join(recent_exchanges)
-
-            prompt = f"""I don't have relevant information in the documents to answer the question: "{question}"
-
-Recent conversation:
-{conversation_summary}
-
-I can only provide information from the documents that have been loaded. To better assist you, you could:
-• Try rephrasing your question with different keywords
-• Check if the topic is covered in your documents
-• Add more documents on this topic to the documents folder
-
-Is there anything else from your documents I can help you with?"""
-        else:
-            prompt = self.fallback_prompt_template.format(question=question)
+        # Always use the restrictive fallback template
+        prompt = self.fallback_prompt_template.format(question=question)
 
         response = self.llm([HumanMessage(content=prompt)])
         answer = response.content.strip()
 
-        # Low confidence for fallback responses
-        confidence = 0.3
+        # Very low confidence for fallback responses to indicate limitation
+        confidence = 0.1
 
         return answer, confidence
 
