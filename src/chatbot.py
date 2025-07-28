@@ -23,6 +23,7 @@ except ImportError:
 from src.retrieval import RetrievalEngine, RetrievalResult, create_retrieval_engine
 from src.document_loader import load_and_chunk_documents
 from src.vector_store import create_vector_store
+from src.conversation_memory import ConversationMemory, create_conversation_memory
 from config import get_settings, validate_settings
 
 # Set up logging
@@ -41,6 +42,7 @@ class ChatResponse:
     retrieval_metadata: Dict[str, Any]
     confidence: float
     model_used: str
+    session_id: Optional[str] = None  # Session identifier for conversation tracking
 
 
 class RAGChatbot:
@@ -49,12 +51,17 @@ class RAGChatbot:
     Provides conversational interface with source attribution.
     """
 
-    def __init__(self, retrieval_engine: Optional[RetrievalEngine] = None):
+    def __init__(
+        self,
+        retrieval_engine: Optional[RetrievalEngine] = None,
+        conversation_memory: Optional[ConversationMemory] = None,
+    ):
         """
         Initialize the RAG chatbot.
 
         Args:
             retrieval_engine: RetrievalEngine instance. Creates new one if None.
+            conversation_memory: ConversationMemory instance. Creates new one if None.
         """
         self.settings = get_settings()
 
@@ -64,6 +71,7 @@ class RAGChatbot:
 
         # Initialize components
         self.retrieval_engine = retrieval_engine or create_retrieval_engine()
+        self.conversation_memory = conversation_memory or create_conversation_memory()
 
         # Initialize language model
         self._init_language_model()
@@ -71,7 +79,7 @@ class RAGChatbot:
         # Create system prompt template
         self._init_prompt_templates()
 
-        logger.info("Initialized RAG chatbot")
+        logger.info("Initialized RAG chatbot with conversation memory")
 
     def _init_language_model(self):
         """Initialize the language model for generation."""
@@ -152,41 +160,83 @@ Please respond following these strict guidelines:
 💬 **Response:**""",
         )
 
-    def chat(self, question: str, max_sources: int = 5) -> ChatResponse:
+    def chat(
+        self, question: str, max_sources: int = 5, session_id: Optional[str] = None
+    ) -> ChatResponse:
         """
-        Process a chat question and return a response with sources.
+        Process a chat question and return a response with sources and conversation context.
 
         Args:
             question: User's question.
             max_sources: Maximum number of source documents to use.
+            session_id: Optional session ID for conversation context. Creates new session if None.
 
         Returns:
-            ChatResponse with answer, sources, and metadata.
+            ChatResponse with answer, sources, metadata, and session ID.
         """
-        logger.info(f"Processing question: '{question}'")
+        logger.info(f"Processing question: '{question}' (session: {session_id})")
 
         try:
-            # Step 1: Retrieve relevant documents
-            sources, retrieval_metadata = self.retrieval_engine.retrieve_documents(
-                query=question, max_results=max_sources
+            # Step 1: Handle session management
+            if session_id is None:
+                session_id = self.conversation_memory.create_session()
+
+            # Add user message to conversation history
+            self.conversation_memory.add_message(session_id, "user", question)
+
+            # Step 2: Get conversation context for enhanced understanding
+            conversation_context = self.conversation_memory.get_conversation_context(
+                session_id, max_messages=6
             )
 
-            # Step 2: Generate response based on retrieved documents
-            if sources:
-                answer, confidence = self._generate_rag_response(question, sources)
-            else:
-                answer, confidence = self._generate_fallback_response(question)
+            # Step 3: Retrieve relevant documents (consider conversation context in query)
+            enhanced_query = self._enhance_query_with_context(
+                question, conversation_context
+            )
+            sources, retrieval_metadata = self.retrieval_engine.retrieve_documents(
+                query=enhanced_query, max_results=max_sources
+            )
 
-            # Step 3: Create response object
+            # Step 4: Generate response based on retrieved documents and conversation context
+            if sources:
+                answer, confidence = self._generate_rag_response(
+                    question, sources, conversation_context
+                )
+            else:
+                answer, confidence = self._generate_fallback_response(
+                    question, conversation_context
+                )
+
+            # Step 5: Add assistant response to conversation history
+            sources_data = [
+                {
+                    "title": s.title,
+                    "source": s.source,
+                    "relevance_score": s.relevance_score,
+                }
+                for s in sources
+            ]
+            self.conversation_memory.add_message(
+                session_id,
+                "assistant",
+                answer,
+                sources=sources_data,
+                confidence=confidence,
+            )
+
+            # Step 6: Create response object
             response = ChatResponse(
                 answer=answer,
                 sources=sources,
                 retrieval_metadata=retrieval_metadata,
                 confidence=confidence,
                 model_used=getattr(self, "model_name", "unknown"),
+                session_id=session_id,
             )
 
-            logger.info(f"Generated response with {len(sources)} sources")
+            logger.info(
+                f"Generated response with {len(sources)} sources (session: {session_id})"
+            )
             return response
 
         except Exception as e:
@@ -198,10 +248,60 @@ Please respond following these strict guidelines:
                 retrieval_metadata={},
                 confidence=0.0,
                 model_used="error",
+                session_id=session_id,
             )
 
+    def _enhance_query_with_context(
+        self, question: str, conversation_context: List[Dict[str, Any]]
+    ) -> str:
+        """
+        Enhance the search query using conversation context.
+
+        Args:
+            question: Current user question
+            conversation_context: Previous conversation messages
+
+        Returns:
+            Enhanced query string for better document retrieval
+        """
+        if not conversation_context or len(conversation_context) < 2:
+            return question
+
+        # Look for potential pronouns or references that need context
+        context_keywords = []
+
+        # Get recent user messages for context
+        recent_user_messages = [
+            msg for msg in conversation_context[-4:] if msg["role"] == "user"
+        ]
+
+        if recent_user_messages:
+            # If current question is short and might reference previous topics
+            if len(question.split()) <= 5:
+                # Add keywords from recent questions
+                for msg in recent_user_messages[-2:]:
+                    words = msg["content"].split()
+                    # Extract potential topic words (nouns, longer words)
+                    topic_words = [
+                        w
+                        for w in words
+                        if len(w) > 4
+                        and w.lower() not in ["what", "where", "when", "which", "about"]
+                    ]
+                    context_keywords.extend(topic_words[:3])  # Limit to avoid noise
+
+        if context_keywords:
+            enhanced_query = f"{question} {' '.join(context_keywords[:3])}"
+            logger.debug(f"Enhanced query: '{question}' -> '{enhanced_query}'")
+            return enhanced_query
+
+        return question
+
     def _generate_rag_response(
-        self, question: str, sources: List[RetrievalResult]
+        self,
+        question: str,
+        sources: List[RetrievalResult],
+        conversation_context: Optional[List[Dict[str, Any]]] = None,
     ) -> tuple[str, float]:
         """
         Generate response using retrieved documents as context.
@@ -209,6 +309,7 @@ Please respond following these strict guidelines:
         Args:
             question: User's question.
             sources: Retrieved source documents.
+            conversation_context: Previous conversation for context
 
         Returns:
             Tuple of (answer, confidence_score).
@@ -230,8 +331,41 @@ Please respond following these strict guidelines:
 
         context = "\n---\n".join(context_parts)
 
-        # Generate prompt
-        prompt = self.rag_prompt_template.format(context=context, question=question)
+        # Generate prompt with conversation context if available
+        if conversation_context and len(conversation_context) > 1:
+            # Build conversation history summary
+            recent_exchanges = []
+            for msg in conversation_context[-4:]:  # Last 4 messages
+                role_indicator = "🧑 User" if msg["role"] == "user" else "🤖 Assistant"
+                recent_exchanges.append(f"{role_indicator}: {msg['content'][:100]}...")
+
+            conversation_summary = "\n".join(recent_exchanges)
+
+            # Use enhanced prompt template with conversation context
+            prompt = f"""You are a document assistant that ONLY provides information from the user's documents. You have access to previous conversation context to better understand follow-up questions.
+
+📄 **Information from your documents:**
+{context}
+
+🗣️ **Recent conversation context:**
+{conversation_summary}
+
+❓ **Current question:** {question}
+
+**CRITICAL:** Answer ONLY based on the document information provided above. Use the conversation context to understand the question better, but do not add external knowledge.
+
+Please provide a helpful answer following these guidelines:
+• 🎯 **Consider conversation context** - if this seems like a follow-up question, acknowledge the connection
+• 📝 **Use clear structure** - bullet points, short paragraphs, emojis for readability  
+• 📚 **Reference sources naturally** - "According to your document..." or "I found that..."
+• 💡 **Focus on what's in the documents** - don't add external explanations
+• 🤔 **Be honest about limitations** - if info is incomplete in documents, say so
+• 🚫 **Never add general knowledge** - only use the provided document content
+
+💬 **Answer based ONLY on the documents:**"""
+        else:
+            # Standard prompt for first message or no context
+            prompt = self.rag_prompt_template.format(context=context, question=question)
 
         # Generate response
         response = self.llm([HumanMessage(content=prompt)])
@@ -242,17 +376,41 @@ Please respond following these strict guidelines:
 
         return answer, confidence
 
-    def _generate_fallback_response(self, question: str) -> tuple[str, float]:
+    def _generate_fallback_response(
+        self, question: str, conversation_context: Optional[List[Dict[str, Any]]] = None
+    ) -> tuple[str, float]:
         """
         Generate fallback response when no relevant documents found.
 
         Args:
             question: User's question.
+            conversation_context: Previous conversation for context
 
         Returns:
             Tuple of (answer, confidence_score).
         """
-        prompt = self.fallback_prompt_template.format(question=question)
+        if conversation_context and len(conversation_context) > 1:
+            # Include conversation context in fallback response
+            recent_exchanges = []
+            for msg in conversation_context[-3:]:  # Last 3 messages
+                role_indicator = "User" if msg["role"] == "user" else "Assistant"
+                recent_exchanges.append(f"{role_indicator}: {msg['content'][:80]}")
+
+            conversation_summary = "\n".join(recent_exchanges)
+
+            prompt = f"""I don't have relevant information in the documents to answer the question: "{question}"
+
+Recent conversation:
+{conversation_summary}
+
+I can only provide information from the documents that have been loaded. To better assist you, you could:
+• Try rephrasing your question with different keywords
+• Check if the topic is covered in your documents
+• Add more documents on this topic to the documents folder
+
+Is there anything else from your documents I can help you with?"""
+        else:
+            prompt = self.fallback_prompt_template.format(question=question)
 
         response = self.llm([HumanMessage(content=prompt)])
         answer = response.content.strip()
@@ -341,6 +499,27 @@ Please respond following these strict guidelines:
         """Clear the local knowledge base."""
         self.retrieval_engine.vector_store.clear_collection()
         logger.info("Cleared knowledge base")
+
+    # Conversation management methods
+    def create_conversation_session(self) -> str:
+        """Create a new conversation session and return session ID."""
+        return self.conversation_memory.create_session()
+
+    def get_conversation_history(
+        self, session_id: str, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Get conversation history for a session."""
+        return self.conversation_memory.get_conversation_context(
+            session_id, max_messages=limit, include_sources=True
+        )
+
+    def list_conversation_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """List recent conversation sessions."""
+        return self.conversation_memory.list_sessions(limit=limit)
+
+    def cleanup_old_conversations(self) -> int:
+        """Clean up old conversation sessions."""
+        return self.conversation_memory.cleanup_old_sessions()
 
 
 def create_chatbot() -> RAGChatbot:

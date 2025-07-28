@@ -343,6 +343,24 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            justify-content: space-between;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            font-size: 12px;
+        }
+
+        .refresh-btn:hover {
+            background: #374151;
+            color: #10b981;
+            transform: rotate(180deg);
         }
 
         .stats-grid {
@@ -594,28 +612,59 @@
                 <h3>
                     <i class="fas fa-chart-line"></i>
                     System Status
+                    <button class="refresh-btn" onclick="refreshSystemStats()" title="Refresh Stats">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
                 </h3>
                 <div class="stats-grid">
                     <div class="stat-item">
                         <span class="stat-label">Documents</span>
-                        <span class="stat-value" id="docCount">384</span>
+                        <span class="stat-value" id="docCount">Loading...</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Model</span>
-                        <span class="stat-value">gemma3n:latest</span>
+                        <span class="stat-value" id="modelName">Loading...</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Embeddings</span>
-                        <span class="stat-value">nomic-embed-text</span>
+                        <span class="stat-value" id="embeddingModel">Loading...</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Similarity</span>
-                        <span class="stat-value">0.7</span>
+                        <span class="stat-value" id="similarityThreshold">Loading...</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Max Results</span>
-                        <span class="stat-value">5</span>
+                        <span class="stat-value" id="maxResults">Loading...</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Conversation Management -->
+            <div class="sidebar-section">
+                <h3>
+                    <i class="fas fa-comments"></i>
+                    Conversation
+                </h3>
+                <div class="conversation-info">
+                    <div class="stat-item">
+                        <span class="stat-label">Session</span>
+                        <span class="stat-value" id="sessionStatus">New</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Messages</span>
+                        <span class="stat-value" id="messageCount">0</span>
+                    </div>
+                </div>
+                <div class="quick-actions">
+                    <button class="action-button" onclick="startNewConversation()">
+                        <i class="fas fa-plus"></i>
+                        New Conversation
+                    </button>
+                    <button class="action-button" onclick="showConversationHistory()">
+                        <i class="fas fa-history"></i>
+                        View History
+                    </button>
                 </div>
             </div>
 
@@ -670,6 +719,10 @@
         const chatInput = document.getElementById('chatInput');
         const sendButton = document.getElementById('sendButton');
 
+        // Conversation session management
+        let currentSessionId = null;
+        let messageCount = 0;
+
         // Auto-resize textarea
         chatInput.addEventListener('input', function () {
             this.style.height = 'auto';
@@ -693,24 +746,37 @@
 
             // Add user message
             addMessage(message, 'user');
+            messageCount++;
             chatInput.value = '';
             chatInput.style.height = 'auto';
 
             // Show loading
             const loadingId = addLoadingMessage();
 
-            // Send to backend
+            // Send to backend with session support
+            const requestBody = { message: message };
+            if (currentSessionId) {
+                requestBody.session_id = currentSessionId;
+            }
+
             fetch('/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ message: message })
+                body: JSON.stringify(requestBody)
             })
                 .then(response => response.json())
                 .then(data => {
                     removeLoadingMessage(loadingId);
+
+                    // Store session ID for future messages
+                    if (data.session_id) {
+                        currentSessionId = data.session_id;
+                    }
+
                     addBotMessage(data.response, data.confidence, data.sources);
+                    updateConversationStatus();
                 })
                 .catch(error => {
                     removeLoadingMessage(loadingId);
@@ -957,12 +1023,8 @@
 
                         alert(message);
 
-                        // Update document count in sidebar
-                        const docCount = document.getElementById('docCount');
-                        if (docCount) {
-                            // Refresh page to update stats
-                            location.reload();
-                        }
+                        // Refresh system stats to show updated document count
+                        loadSystemStats();
                     } else {
                         alert(`❌ Indexing failed: ${data.error}`);
                     }
@@ -982,6 +1044,7 @@
 • Ask questions about your documents
 • Be specific for better results
 • Check confidence scores
+• Follow-up questions remember context
 
 📄 Supported files:
 • PDF, DOCX, TXT, MD, HTML
@@ -990,14 +1053,171 @@
 • Try different phrasings
 • Ask follow-up questions
 • Use specific keywords
+• Start new conversations for different topics
 
 📁 Document Management:
 • Add files to ./documents/ folder
 • Auto-indexing detects new files
 • Use "Re-index Documents" button if needed
 
+💬 Conversation Features:
+• Chat history is automatically saved
+• Start new conversations for different topics
+• View previous conversation sessions
+
 Need more help? Check the documentation.`);
         }
+
+        // Conversation Management Functions
+        function updateConversationStatus() {
+            const sessionStatusElement = document.getElementById('sessionStatus');
+            const messageCountElement = document.getElementById('messageCount');
+
+            if (currentSessionId) {
+                sessionStatusElement.textContent = 'Active';
+                sessionStatusElement.style.color = '#10b981';
+            } else {
+                sessionStatusElement.textContent = 'New';
+                sessionStatusElement.style.color = '#6b7280';
+            }
+
+            messageCountElement.textContent = Math.floor(messageCount / 2); // Divide by 2 for conversation pairs
+        }
+
+        function startNewConversation() {
+            if (confirm('Start a new conversation? This will clear the current chat.')) {
+                currentSessionId = null;
+                messageCount = 0;
+                clearChat();
+                updateConversationStatus();
+            }
+        }
+
+        function showConversationHistory() {
+            fetch('/api/conversations')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sessions && data.sessions.length > 0) {
+                        let historyText = 'Recent Conversations:\n\n';
+                        data.sessions.slice(0, 10).forEach((session, index) => {
+                            const date = new Date(session.last_updated).toLocaleDateString();
+                            const time = new Date(session.last_updated).toLocaleTimeString();
+                            historyText += `${index + 1}. ${date} ${time}\n`;
+                            historyText += `   Messages: ${session.message_count}\n\n`;
+                        });
+                        alert(historyText);
+                    } else {
+                        alert('No conversation history found.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error loading conversation history.');
+                });
+        }
+
+        function clearChat() {
+            messagesContainer.innerHTML = '';
+        }
+
+        function exportChat() {
+            if (!currentSessionId) {
+                alert('No active conversation to export.');
+                return;
+            }
+
+            fetch(`/api/conversations/${currentSessionId}/history`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.history) {
+                        let exportText = `Chat Export - Session: ${currentSessionId}\n`;
+                        exportText += `Generated: ${new Date().toLocaleString()}\n\n`;
+
+                        data.history.forEach(msg => {
+                            const time = new Date(msg.timestamp).toLocaleTimeString();
+                            const role = msg.role === 'user' ? 'You' : 'Assistant';
+                            exportText += `[${time}] ${role}: ${msg.content}\n\n`;
+                        });
+
+                        const blob = new Blob([exportText], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `chat-export-${new Date().toISOString().split('T')[0]}.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error exporting chat.');
+                });
+        }
+
+        // System Status Functions
+        function loadSystemStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    // Update document count
+                    const docCount = data.retrieval_engine?.vector_store?.document_count || 0;
+                    document.getElementById('docCount').textContent = docCount;
+
+                    // Update model name
+                    const modelName = (data.model || 'Unknown').replace(':latest', '');
+                    document.getElementById('modelName').textContent = modelName;
+
+                    // Update embedding model (get from vector store data)
+                    const embeddingModel = data.retrieval_engine?.vector_store?.embedding_model ||
+                        (data.settings?.use_local_embeddings ? 'nomic-embed-text' :
+                            data.settings?.embedding_model) || 'Unknown';
+                    // Clean up the model name for display
+                    const displayModel = embeddingModel.replace(':latest', '').replace('nomic-embed-text:latest', 'nomic-embed-text');
+                    document.getElementById('embeddingModel').textContent = displayModel;
+
+                    // Update similarity threshold
+                    const similarity = data.settings?.similarity_threshold || 0.15;
+                    document.getElementById('similarityThreshold').textContent = similarity;
+
+                    // Update max results
+                    const maxResults = data.settings?.max_docs_to_retrieve || 5;
+                    document.getElementById('maxResults').textContent = maxResults;
+                })
+                .catch(error => {
+                    console.error('Error loading system stats:', error);
+                    // Set fallback values
+                    document.getElementById('docCount').textContent = 'Error';
+                    document.getElementById('modelName').textContent = 'Error';
+                    document.getElementById('embeddingModel').textContent = 'Error';
+                    document.getElementById('similarityThreshold').textContent = 'Error';
+                    document.getElementById('maxResults').textContent = 'Error';
+                });
+        }
+
+        function refreshSystemStats() {
+            // Add visual feedback
+            const refreshBtn = event.target.closest('.refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.style.color = '#10b981';
+                refreshBtn.style.transform = 'rotate(360deg)';
+            }
+
+            loadSystemStats();
+
+            // Reset button appearance after 1 second
+            setTimeout(() => {
+                if (refreshBtn) {
+                    refreshBtn.style.color = '';
+                    refreshBtn.style.transform = '';
+                }
+            }, 1000);
+        }
+
+        // Initialize conversation status and system stats on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            updateConversationStatus();
+            loadSystemStats();
+        });
 
         // Focus input on load
         chatInput.focus();

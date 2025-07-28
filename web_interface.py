@@ -108,7 +108,8 @@ def chat_api():
     Expected JSON payload:
     {
         "message": "User's message",  # or "question" for compatibility
-        "max_sources": 5  # Optional
+        "max_sources": 5,  # Optional
+        "session_id": "session-uuid"  # Optional - creates new session if not provided
     }
     """
     try:
@@ -124,12 +125,13 @@ def chat_api():
 
         question = question.strip()
         max_sources = data.get("max_sources", 5)
+        session_id = data.get("session_id")  # Optional session ID
 
         if not question:
             return jsonify({"error": "Empty message"}), 400
 
-        # Get chatbot response
-        response = chatbot.chat(question, max_sources)
+        # Get chatbot response with session support
+        response = chatbot.chat(question, max_sources, session_id)
 
         # Format sources for JSON response
         sources_data = []
@@ -154,6 +156,7 @@ def chat_api():
                 "confidence": response.confidence,
                 "retrieval_metadata": response.retrieval_metadata,
                 "model_used": response.model_used,
+                "session_id": response.session_id,  # Include session ID for frontend tracking
             }
         )
 
@@ -170,6 +173,52 @@ def stats_api():
         return jsonify(stats)
     except Exception as e:
         logger.error(f"Error getting stats: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations", methods=["GET"])
+def list_conversations_api():
+    """List recent conversation sessions."""
+    try:
+        limit = request.args.get("limit", 20, type=int)
+        sessions = chatbot.list_conversation_sessions(limit=limit)
+        return jsonify({"sessions": sessions})
+    except Exception as e:
+        logger.error(f"Error listing conversations: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations", methods=["POST"])
+def create_conversation_api():
+    """Create a new conversation session."""
+    try:
+        session_id = chatbot.create_conversation_session()
+        return jsonify({"session_id": session_id})
+    except Exception as e:
+        logger.error(f"Error creating conversation: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations/<session_id>/history", methods=["GET"])
+def get_conversation_history_api(session_id):
+    """Get conversation history for a specific session."""
+    try:
+        limit = request.args.get("limit", 50, type=int)
+        history = chatbot.get_conversation_history(session_id, limit=limit)
+        return jsonify({"history": history, "session_id": session_id})
+    except Exception as e:
+        logger.error(f"Error getting conversation history: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/conversations/cleanup", methods=["POST"])
+def cleanup_conversations_api():
+    """Clean up old conversation sessions."""
+    try:
+        cleaned_count = chatbot.cleanup_old_conversations()
+        return jsonify({"cleaned_sessions": cleaned_count})
+    except Exception as e:
+        logger.error(f"Error cleaning up conversations: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 

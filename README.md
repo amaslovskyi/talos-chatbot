@@ -6,21 +6,35 @@ A sophisticated **Retrieval-Augmented Generation (RAG)** chatbot that combines l
 
 ## 🌟 Features
 
+### Core Capabilities
 - **📄 Multi-format Document Support**: PDF, DOCX, TXT, Markdown, and HTML files
 - **🔍 Intelligent Retrieval**: Vector similarity search using ChromaDB and embeddings
 - **🤖 Local & External LLMs**: Support for Ollama (local) and external APIs (OpenAI, Anthropic, Google)
-- **🔄 Automatic Document Management**: Real-time file watching and smart indexing
-- **🗑️ Deletion Handling**: Automatically removes deleted documents from the index
 - **🌐 Corporate Portal Integration**: Fallback search with both API and web scraping support
 - **🎯 Smart Confidence Scoring**: Determines when to use fallback based on local result quality
-- **💬 Multiple Interfaces**: Web UI with management controls, command-line chat, and REST API
+
+### **🧠 Conversation Memory & Context**
+- **💭 Persistent Chat History**: All conversations automatically saved with session management
+- **🔗 Context-Aware Responses**: Understands follow-up questions and references to previous messages
+- **📝 Smart Query Enhancement**: Short questions get context from conversation history
+- **🆔 Session Management**: UUID-based conversation tracking with automatic session creation
+- **📂 Conversation Export**: Download chat sessions as text files for record keeping
+- **🗂️ History Browser**: View and manage previous conversation sessions
+
+### Document & System Management
+- **🔄 Automatic Document Management**: Real-time file watching and smart indexing
+- **🗑️ Deletion Handling**: Automatically removes deleted documents from the index
 - **👀 File System Monitoring**: Automatic detection of document changes using watchdog
-- **⚙️ Highly Configurable**: Support for local models, external APIs, and extensive settings
 - **📊 Status Reporting**: Real-time indexing status and document synchronization
+
+### Interfaces & Configuration
+- **💬 Multiple Interfaces**: Web UI with conversation controls, command-line chat, and REST API
+- **⚙️ Highly Configurable**: Support for local models, external APIs, and extensive settings
+- **🎮 Interactive Web UI**: Modern interface with conversation management, session tracking, and real-time status
 
 ## 🏗️ Architecture
 
-The system uses a modular architecture with clear separation of concerns:
+The system uses a modular architecture with clear separation of concerns and conversation memory:
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -30,14 +44,20 @@ The system uses a modular architecture with clear separation of concerns:
                                 ▼                        ▼
                        ┌─────────────────┐    ┌─────────────────┐
                        │ Vector Store    │    │ Language Model  │
-                       │ (ChromaDB)      │    │ (OpenAI GPT)    │
+                       │ (ChromaDB)      │    │ (Ollama/OpenAI) │
                        └─────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌─────────────────┐
-                       │Corporate Portal │
-                       │   (Fallback)    │
-                       └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                       ┌─────────────────┐    ┌─────────────────┐
+                       │Corporate Portal │    │Conversation     │
+                       │   (Fallback)    │    │Memory System    │
+                       └─────────────────┘    └─────────────────┘
+                                                       │
+                                                       ▼
+                                               ┌─────────────────┐
+                                               │Persistent Storage│
+                                               │   (JSON files)  │
+                                               └─────────────────┘
 ```
 
 ## 🚀 Quick Start
@@ -198,8 +218,62 @@ curl -X POST http://localhost:5001/api/chat \
   -H "Content-Type: application/json" \
   -d '{"question": "What are the security guidelines?"}'
 
+# Send a chat request with session ID (for conversation continuity)
+curl -X POST http://localhost:5001/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tell me more about that policy", "session_id": "your-session-id"}'
+
 # Get system statistics
 curl http://localhost:5001/api/stats
+
+# Conversation management endpoints
+curl http://localhost:5001/api/conversations                    # List recent conversations
+curl -X POST http://localhost:5001/api/conversations           # Create new conversation
+curl http://localhost:5001/api/conversations/SESSION_ID/history # Get conversation history
+```
+
+## 🧠 Conversation Memory Features
+
+The system now includes sophisticated conversation memory that enables natural follow-up questions and contextual understanding:
+
+### **How Conversation Memory Works**
+```bash
+# Example conversation flow:
+User: "What is the company's vacation policy?"
+Bot: "According to the HR handbook, employees get 20 days of vacation per year..."
+
+User: "What about sick leave?"  # ← Bot understands this relates to HR policies
+Bot: "Based on the same HR document, employees receive 10 days of sick leave..."
+
+User: "Can I combine them?"    # ← Bot knows "them" refers to vacation and sick leave
+Bot: "The HR handbook states that vacation and sick leave cannot be combined..."
+```
+
+### **Key Conversation Features**
+- **🔗 Context Continuity**: Bot remembers what you discussed in the current session
+- **📝 Smart References**: Understands pronouns and references like "that", "it", "them"
+- **🎯 Enhanced Queries**: Short follow-up questions automatically include context
+- **💾 Persistent Sessions**: Conversations survive browser refresh and restarts
+- **📊 Session Tracking**: Real-time session status and message counts in web UI
+
+### **Web Interface Conversation Controls**
+- **🆕 New Conversation**: Start fresh topics without losing context
+- **📜 View History**: Browse previous conversation sessions with timestamps
+- **📁 Export Chat**: Download complete conversations as text files
+- **🔄 Session Management**: Automatic session creation and management
+
+### **Conversation API Usage**
+```bash
+# Create a new conversation session
+curl -X POST http://localhost:5001/api/conversations
+
+# Get conversation history
+curl http://localhost:5001/api/conversations/SESSION_ID/history
+
+# Continue an existing conversation
+curl -X POST http://localhost:5001/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tell me more", "session_id": "existing-session-id"}'
 ```
 
 ## 🔄 Automatic Document Management
@@ -299,17 +373,29 @@ Once running, the system:
 | `FLASK_PORT`  | `5001`      | Web server port         |
 | `FLASK_DEBUG` | `true`      | Enable Flask debug mode |
 
+#### Conversation Memory
+| Setting                  | Default                      | Description                             |
+| ------------------------ | ---------------------------- | --------------------------------------- |
+| **Storage Location**     | `./vector_db/conversations/` | Where conversation files are stored     |
+| **Session Timeout**      | 24 hours                     | How long conversations are kept         |
+| **Auto-cleanup**         | Enabled                      | Automatically removes old conversations |
+| **Max Context Messages** | 10                           | Maximum messages included in context    |
+| **Session ID Format**    | UUID4                        | Unique identifier format for sessions   |
+
 ### Retrieval Logic
 
-The system uses intelligent retrieval logic:
+The system uses intelligent retrieval logic with conversation awareness:
 
-1. **Primary Search**: Query local vector store
-2. **Confidence Evaluation**: Analyze result quality and relevance scores
-3. **Fallback Decision**: Use corporate portal if:
+1. **Conversation Context**: Retrieve recent conversation history for context
+2. **Query Enhancement**: Enhance short queries with conversation keywords
+3. **Primary Search**: Query local vector store with enhanced query
+4. **Confidence Evaluation**: Analyze result quality and relevance scores
+5. **Fallback Decision**: Use corporate portal if:
    - No high-confidence local results
    - Fewer than 2 relevant local documents
    - Average confidence below threshold
-4. **Response Generation**: Combine retrieved content with GPT for final answer
+6. **Response Generation**: Combine retrieved content with conversation context and LLM
+7. **Memory Storage**: Save user question and bot response to conversation history
 
 ## 🛠️ Development
 
@@ -319,8 +405,9 @@ The system uses intelligent retrieval logic:
 talos-chatbot/
 ├── src/
 │   ├── __init__.py
-│   ├── chatbot.py              # Main RAG orchestrator
+│   ├── chatbot.py              # Main RAG orchestrator with conversation support
 │   ├── hybrid_chatbot.py       # Hybrid LLM support (local + external)
+│   ├── conversation_memory.py  # Conversation memory and session management
 │   ├── document_loader.py      # Document processing
 │   ├── vector_store.py         # ChromaDB vector operations
 │   ├── retrieval.py           # Retrieval logic and fallback
@@ -329,11 +416,13 @@ talos-chatbot/
 │   ├── auto_indexer.py        # Automatic document indexing
 │   └── file_watcher.py        # Real-time file system monitoring
 ├── templates/
-│   └── index.html             # Modern web interface with controls
+│   └── index.html             # Modern web interface with conversation controls
 ├── static/
 │   └── avatar.svg             # Assistant avatar image
+├── vector_db/
+│   └── conversations/         # Persistent conversation storage (JSON files)
 ├── config.py                  # Configuration management
-├── web_interface.py           # Flask web server with auto-indexing
+├── web_interface.py           # Flask web server with conversation APIs
 ├── main.py                    # Main CLI entry point
 ├── install.sh                 # Installation script with venv support
 ├── setup.py                   # Python setup script
@@ -473,7 +562,26 @@ Response:
    export CORPORATE_PORTAL_PASSWORD=your_password
    ```
 
-7. **Python 3.13 setuptools issues**
+7. **Conversation memory not working**
+   ```bash
+   # Check if conversations directory exists
+   ls -la ./vector_db/conversations/
+   
+   # Verify conversation storage permissions
+   mkdir -p ./vector_db/conversations
+   
+   # Clear old conversation data if corrupted
+   rm -rf ./vector_db/conversations/*.json
+   ```
+
+8. **Session not persisting between browser refreshes**
+   ```bash
+   # This is expected behavior - each browser session starts fresh
+   # Use "View History" to access previous conversations
+   # Export important conversations before closing browser
+   ```
+
+9. **Python 3.13 setuptools issues**
    ```bash
    # Run the setup script to handle compatibility
    python setup.py
@@ -482,16 +590,16 @@ Response:
    pip install --upgrade pip setuptools wheel
    ```
 
-8. **Package installation failures**
-   ```bash
-   # Use the installation script (recommended)
-   ./install.sh
-   
-   # Or install dependencies manually
-   pip install --upgrade setuptools pip wheel
-   pip install langchain langchain-community langchain-ollama
-   pip install chromadb sentence-transformers watchdog
-   ```
+10. **Package installation failures**
+    ```bash
+    # Use the installation script (recommended)
+    ./install.sh
+    
+    # Or install dependencies manually
+    pip install --upgrade setuptools pip wheel
+    pip install langchain langchain-community langchain-ollama
+    pip install chromadb sentence-transformers watchdog
+    ```
 
 ### Debug Mode
 
