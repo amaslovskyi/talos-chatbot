@@ -613,6 +613,39 @@ Always searched first     Multi-directory support    Only for specialized querie
 Fast & comprehensive     Real-time file watching     GitHub repos, docs sites
 ```
 
+## 🔒 Security
+
+The RAG Chatbot implements comprehensive security measures to protect sensitive data and ensure safe operation:
+
+### **🛡️ Security Features**
+- **🔐 Zero Hardcoded Secrets**: All credentials managed through environment variables
+- **🕵️ Automated Secret Scanning**: GitLeaks integration scans every commit and PR
+- **📁 Data Protection**: Conversations and vector databases excluded from version control
+- **🎯 Smart Allowlisting**: Custom rules prevent false positives while catching real secrets
+- **📊 Security Monitoring**: Automated scanning with detailed reporting
+
+### **🔍 GitLeaks Integration**
+Every pull request and push is automatically scanned for:
+- API keys (OpenAI, Anthropic, Google, AWS)
+- GitHub tokens and SSH keys
+- Private keys and certificates
+- Database connection strings
+- Custom patterns specific to this project
+
+**Workflow**: `.github/workflows/gitleaks.yml`  
+**Configuration**: `.gitleaks.toml`  
+**Documentation**: `SECURITY.md`
+
+### **✅ Security Checklist**
+Before contributing:
+- [ ] No hardcoded credentials in code
+- [ ] Environment variables used for sensitive data
+- [ ] Test credentials clearly marked as placeholders
+- [ ] Personal data excluded from commits
+- [ ] Security scan passes (automatic)
+
+For detailed security information, see [SECURITY.md](SECURITY.md).
+
 ## 🛠️ Development
 
 ### Project Structure
@@ -749,6 +782,32 @@ Response:
   ```
 
 ## 🚨 Troubleshooting
+
+### **🔒 Security-Related Issues**
+
+13. **GitLeaks scan failing with false positives**
+    ```bash
+    # Check GitLeaks configuration
+    cat .gitleaks.toml
+    
+    # The configuration includes smart allowlisting for:
+    # - Template files (setup.py, install.sh, README.md)
+    # - Placeholder values (your_api_key_here)
+    # - Environment variable references
+    # - Code comments and documentation
+    
+    # If legitimate placeholder text is flagged, add to .gitleaks.toml allowlist
+    ```
+
+14. **Security scan reporting template credentials as secrets**
+    ```bash
+    # This is expected behavior for actual credentials
+    # Template values like "your_api_key_here" are allowlisted
+    # Real API keys should never be committed to version control
+    
+    # To fix: Remove real credentials and use environment variables
+    export EXTERNAL_API_KEY=your_real_key
+    ```
 
 ### Common Issues
 

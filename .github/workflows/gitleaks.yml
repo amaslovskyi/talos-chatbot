@@ -1,0 +1,56 @@
+name: GITLEAKS-SCANNER
+
+on: 
+  pull_request:
+    branches: [ main, master, develop ]
+  push:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions: 
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  scan:
+    name: gitleaks-security-scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Clean up old gitleaks temporary files
+        run: rm -f /tmp/gitleaks.tmp /tmp/gitleaks-report.json
+        
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comprehensive scanning
+          submodules: true
+          
+      - name: Run GitLeaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml
+          
+      - name: Upload GitLeaks report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: results.json
+          retention-days: 5
+          
+      - name: Comment PR with security findings
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚨 **GitLeaks Security Scan Failed**\n\nPotential secrets or credentials detected in this PR. Please review the security scan results and remove any sensitive information before merging.\n\n📋 Check the Actions tab for detailed results.'
+            }) 

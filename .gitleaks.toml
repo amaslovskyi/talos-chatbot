@@ -1,0 +1,132 @@
+# GitLeaks Configuration for RAG Chatbot Project
+# https://github.com/gitleaks/gitleaks
+
+title = "RAG Chatbot GitLeaks Configuration"
+
+[extend]
+# Use GitLeaks default rules as baseline
+useDefault = true
+
+# Custom rules for this project
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20}'''
+tags = ["api", "openai", "key"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API Key"
+regex = '''sk-ant-[a-zA-Z0-9\-_]{95,100}'''
+tags = ["api", "anthropic", "key"]
+
+[[rules]]
+id = "google-api-key"
+description = "Google API Key"
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+tags = ["api", "google", "key"]
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key"
+regex = '''AKIA[0-9A-Z]{16}'''
+tags = ["aws", "key"]
+
+[[rules]]
+id = "github-token"
+description = "GitHub Token"
+regex = '''ghp_[0-9a-zA-Z]{36}'''
+tags = ["github", "token"]
+
+[[rules]]
+id = "private-key"
+description = "Private Key"
+regex = '''-----BEGIN (RSA |OPENSSH |DSA |EC |PGP )?PRIVATE KEY-----'''
+tags = ["private", "key"]
+
+# Allowlist - files and patterns to ignore
+[[allowlist]]
+description = "Template API keys in documentation and setup files"
+paths = [
+    '''setup\.py''',
+    '''install\.sh''',
+    '''README\.md''',
+    '''\.env\.example''',
+    '''\.env\.template'''
+]
+
+[[allowlist]]
+description = "Test and placeholder API keys"
+regexes = [
+    '''your_.*_api_key_here''',
+    '''your_.*_key_here''',
+    '''your_.*_token_here''',
+    '''your_.*_password''',
+    '''sk-.*your.*''',
+    '''REPLACE_.*''',
+    '''PLACEHOLDER_.*''',
+    '''EXAMPLE_.*''',
+    '''TEST_.*''',
+    '''DEMO_.*'''
+]
+
+[[allowlist]]
+description = "Environment variable names (not values)"
+regexes = [
+    '''[A-Z_]+_API_KEY\s*=\s*$''',
+    '''[A-Z_]+_TOKEN\s*=\s*$''',
+    '''[A-Z_]+_SECRET\s*=\s*$''',
+    '''[A-Z_]+_PASSWORD\s*=\s*$'''
+]
+
+[[allowlist]]
+description = "Code comments and documentation"
+regexes = [
+    '''#.*API.*key''',
+    '''//.*API.*key''',
+    '''\*.*API.*key''',
+    '''""".*API.*key.*"""''',
+    '''\'\'\'.*API.*key.*\'\'\'''' 
+]
+
+[[allowlist]]
+description = "Common false positives"
+regexes = [
+    '''openai_api_key.*settings''',
+    '''self\..*api.*key''',
+    '''config\..*api.*key''',
+    '''getattr.*api.*key''',
+    '''os\.environ.*API.*KEY''',
+    '''settings\..*api.*key'''
+]
+
+# Path-based allowlist for specific files
+[[allowlist]]
+description = "Configuration files with environment variable references"
+paths = [
+    '''config\.py''',
+    '''src/.*\.py''',
+    '''templates/.*\.html''',
+    '''static/.*''',
+    '''documents/.*'''
+]
+
+# Global settings
+[allowlist.files]
+# Ignore binary files and non-code files
+paths = [
+    '''\.git/.*''',
+    '''\.gitignore''',
+    '''vector_db/.*''',
+    '''__pycache__/.*''',
+    '''\.pyc$''',
+    '''\.jpg$''',
+    '''\.png$''',
+    '''\.pdf$''',
+    '''\.svg$''',
+    '''\.ico$''',
+    '''node_modules/.*''',
+    '''\.venv/.*''',
+    '''venv/.*''',
+    '''talos/.*'''
+] 
