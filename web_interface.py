@@ -7,6 +7,8 @@ MIT License - Copyright (c) 2025 talos-chatbot
 
 import os
 import logging
+import threading
+import time
 from typing import Dict, Any
 from flask import (
     Flask,
@@ -35,6 +37,10 @@ CORS(app)  # Enable CORS for API endpoints
 # Global instances
 chatbot: HybridRAGChatbot = None
 document_watcher = None
+
+# Global dictionary to track active chat requests for stop functionality
+active_requests = {}
+request_lock = threading.Lock()
 
 
 def reindex_documents():
@@ -132,6 +138,15 @@ def chat_api():
 
         question = question.strip()
         max_sources = data.get("max_sources", 5)
+
+        # Generate unique request ID for stop functionality
+        import uuid
+
+        request_id = str(uuid.uuid4())
+
+        # Track this request
+        with request_lock:
+            active_requests[request_id] = {"stopped": False, "timestamp": time.time()}
         session_id = data.get("session_id")  # Optional session ID
 
         if not question:
@@ -155,6 +170,10 @@ def chat_api():
             }
             sources_data.append(source_data)
 
+        # Clean up request tracking
+        with request_lock:
+            active_requests.pop(request_id, None)
+
         # Return response in the format expected by frontend
         return jsonify(
             {
@@ -164,12 +183,39 @@ def chat_api():
                 "retrieval_metadata": response.retrieval_metadata,
                 "model_used": response.model_used,
                 "session_id": response.session_id,  # Include session ID for frontend tracking
+                "request_id": request_id,  # Include request ID for stop functionality
             }
         )
 
     except Exception as e:
+        # Clean up request tracking on error
+        with request_lock:
+            active_requests.pop(request_id, None)
         logger.error(f"Error in chat API: {str(e)}")
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+
+@app.route("/stop-chat", methods=["POST"])
+def stop_chat():
+    """Stop an active chat request."""
+    try:
+        data = request.get_json()
+        request_id = data.get("request_id")
+
+        if not request_id:
+            return jsonify({"error": "No request_id provided"}), 400
+
+        with request_lock:
+            if request_id in active_requests:
+                active_requests[request_id]["stopped"] = True
+                logger.info(f"🛑 Chat request {request_id} marked for stopping")
+                return jsonify({"status": "stopped", "request_id": request_id})
+            else:
+                return jsonify({"error": "Request not found or already completed"}), 404
+
+    except Exception as e:
+        logger.error(f"Error stopping chat: {str(e)}")
+        return jsonify({"error": f"Error: {str(e)}"}), 500
 
 
 @app.route("/chat-stream", methods=["POST"])
