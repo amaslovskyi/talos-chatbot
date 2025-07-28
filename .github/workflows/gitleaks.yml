@@ -11,6 +11,8 @@ permissions:
   contents: read
   security-events: write
   actions: read
+  issues: write
+  pull-requests: write
 
 jobs:
   scan:
@@ -32,25 +34,30 @@ jobs:
         env:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          config-path: .gitleaks.toml
           
       - name: Upload GitLeaks report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-report
-          path: results.json
+          path: results.sarif
           retention-days: 5
+          if-no-files-found: warn
           
       - name: Comment PR with security findings
         if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '🚨 **GitLeaks Security Scan Failed**\n\nPotential secrets or credentials detected in this PR. Please review the security scan results and remove any sensitive information before merging.\n\n📋 Check the Actions tab for detailed results.'
-            }) 
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '🚨 **GitLeaks Security Scan Failed**\n\nPotential secrets or credentials detected in this PR. Please review the security scan results and remove any sensitive information before merging.\n\n📋 Check the Actions tab for detailed results.'
+              });
+            } catch (error) {
+              console.log('Failed to comment on PR:', error.message);
+              core.warning('Could not comment on PR. This may be due to permissions or token limitations.');
+            } 
