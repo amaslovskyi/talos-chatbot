@@ -109,7 +109,7 @@ EXTERNAL_API_MODEL=gpt-3.5-turbo
 # =========================
 # Corporate Portal Configuration
 # =========================
-CORPORATE_PORTAL_URL=https://www.andrewng.org/
+CORPORATE_PORTAL_URL=https://github.com/snort3/snort3/
 CORPORATE_PORTAL_API_KEY=your_portal_api_key_here
 CORPORATE_PORTAL_USERNAME=your_username
 CORPORATE_PORTAL_PASSWORD=your_password

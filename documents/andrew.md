@@ -1,0 +1,10 @@
+Andrew Yan-Tak Ng (Chinese: 吳恩達; born April 18, 1976[2]) is a British-American computer scientist and technology entrepreneur focusing on machine learning and artificial intelligence (AI).[3] Ng was a cofounder and head of Google Brain and was the former Chief Scientist at Baidu, building the company's Artificial Intelligence Group into a team of several thousand people.[4]
+
+Ng is an adjunct professor at Stanford University (formerly associate professor and Director of its Stanford AI Lab or SAIL). Ng has also worked in the field of online education, cofounding Coursera and DeepLearning.AI.[5] He has spearheaded many efforts to "democratize deep learning" teaching over 8 million students through his online courses.[6][3][7] Ng is renowned globally in computer science, recognized in Time magazine's 100 Most Influential People in 2012 and Fast Company's Most Creative People in 2014. His influence extends to being named in the Time100 AI Most Influential People in 2023.[7]
+
+In 2018, he launched and currently heads the AI Fund, initially a $175-million investment fund for backing artificial intelligence startups. He has founded Landing AI, which provides AI-powered SaaS products.[8]
+
+On April 11, 2024, Amazon announced the appointment of Ng to its board of directors.[9]
+
+Biography
+Ng was born in London, United Kingdom,[10] in 1976 to Ronald Paul Ng, a hematologist and lecturer at UCL Medical School, and Tisa Ho, an arts administrator working at the London Film Festival.[11][12][13] His parents were both immigrants from Hong Kong. He has at least one brother.[12] Ng and his family moved back to Hong Kong and he spent his early years there. At the age of six he began learning the basics of programming through some books. In 1984 he and his family moved to Singapore.[10] Ng attended and graduated from Raffles Institution.[14] During his high school years, he demonstrated exceptional mathematical ability, winning a Silver Medal at the International Mathematical Olympiad.[15]
